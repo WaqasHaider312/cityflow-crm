@@ -2,95 +2,128 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* CityTeam CRM Design System - Linear/Height inspired */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core Brand */
+    --primary: 217 100% 50%; /* #0066FF Deep Blue */
+    --primary-foreground: 0 0% 100%;
+    
+    /* Status Colors */
+    --success: 145 100% 39%; /* #00C853 Green */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 100% 50%; /* #FFA000 Amber */
+    --warning-foreground: 0 0% 100%;
+    --danger: 14 100% 50%; /* #FF3D00 Red */
+    --danger-foreground: 0 0% 100%;
+    --info: 263 84% 55%; /* #7C3AED Purple */
+    --info-foreground: 0 0% 100%;
 
+    /* Surfaces */
+    --background: 210 20% 98%; /* #FAFAFA Light gray */
+    --foreground: 220 13% 10%; /* #111827 Almost black */
+    --surface: 0 0% 100%; /* White */
+    
+    /* Cards & Popovers */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 220 13% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 13% 10%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Secondary Elements */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 13% 10%;
+    
+    /* Muted */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%; /* #6B7280 Gray */
+    
+    /* Accent */
+    --accent: 217 100% 50%;
+    --accent-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Destructive */
+    --destructive: 14 100% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Borders & Inputs */
+    --border: 220 13% 91%; /* #E5E7EB */
+    --input: 220 13% 91%;
+    --ring: 217 100% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
+    /* Radius - Rounded corners */
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 13% 10%;
+    --sidebar-primary: 217 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 220 13% 10%;
     --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 100% 50%;
 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Text hierarchy */
+    --text-primary: 220 13% 10%;
+    --text-secondary: 220 9% 46%;
+    --text-muted: 220 9% 62%; /* #9CA3AF */
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --primary: 217 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    
+    --success: 145 100% 45%;
+    --warning: 38 100% 55%;
+    --danger: 14 100% 55%;
+    --info: 263 84% 65%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --background: 220 13% 10%;
+    --foreground: 220 14% 96%;
+    --surface: 220 13% 14%;
+    
+    --card: 220 13% 14%;
+    --card-foreground: 220 14% 96%;
+    --popover: 220 13% 14%;
+    --popover-foreground: 220 14% 96%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --secondary: 220 13% 18%;
+    --secondary-foreground: 220 14% 96%;
+    
+    --muted: 220 13% 18%;
+    --muted-foreground: 220 9% 62%;
+    
+    --accent: 217 100% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --destructive: 14 100% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --border: 220 13% 20%;
+    --input: 220 13% 20%;
+    --ring: 217 100% 60%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 220 13% 12%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 217 100% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 13% 18%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 220 13% 20%;
+    --sidebar-ring: 217 100% 60%;
+
+    --text-primary: 220 14% 96%;
+    --text-secondary: 220 9% 62%;
+    --text-muted: 220 9% 46%;
   }
 }
 
@@ -99,7 +132,116 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  /* Status Badges */
+  .badge-new {
+    @apply bg-primary text-primary-foreground;
+  }
+  
+  .badge-assigned {
+    @apply bg-info text-info-foreground;
+  }
+  
+  .badge-in-progress {
+    @apply bg-warning text-warning-foreground;
+  }
+  
+  .badge-pending {
+    @apply bg-warning/80 text-foreground;
+  }
+  
+  .badge-resolved {
+    @apply bg-success text-success-foreground;
+  }
+  
+  .badge-closed {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Priority Badges */
+  .priority-low {
+    @apply bg-muted text-muted-foreground;
+  }
+  
+  .priority-normal {
+    @apply bg-primary/10 text-primary;
+  }
+  
+  .priority-high {
+    @apply bg-warning/15 text-warning;
+  }
+  
+  .priority-critical {
+    @apply bg-danger/15 text-danger animate-pulse-subtle;
+  }
+
+  /* SLA Status */
+  .sla-on-track {
+    @apply text-success;
+  }
+  
+  .sla-warning {
+    @apply text-warning;
+  }
+  
+  .sla-breached {
+    @apply text-danger;
+  }
+
+  /* Card hover effect */
+  .card-hover {
+    @apply transition-all duration-200 ease-out hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-sm;
+  }
+}
+
+@layer utilities {
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
   }
 }
