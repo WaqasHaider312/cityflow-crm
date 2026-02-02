@@ -1,20 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Ticket, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { GroupedIssueCard } from '@/components/dashboard/GroupedIssueCard';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
-import { tickets, ticketGroups } from '@/lib/mockData';
+import { supabase } from '@/lib/supabase';
+import { toast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [tickets, setTickets] = useState([]);
+  const [ticketGroups, setTicketGroups] = useState([]);
+
+  // Fetch data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch tickets
+        const { data: ticketsData, error: ticketsError } = await supabase
+          .from('tickets')
+          .select(`
+            *,
+            issue_type:issue_types(name, icon),
+            assigned_user:profiles!assigned_to(full_name),
+            team:teams(name)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (ticketsError) throw ticketsError;
+
+        // Fetch ticket groups
+        const { data: groupsData, error: groupsError } = await supabase
+          .from('ticket_groups')
+          .select(`
+            *,
+            issue_type:issue_types(name, icon),
+            assigned_user:profiles!assigned_to(full_name),
+            tickets:tickets(id)
+          `)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false });
+
+        if (groupsError) throw groupsError;
+
+        setTickets(ticketsData || []);
+        setTicketGroups(groupsData || []);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        toast({ title: "Error loading dashboard", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // Calculate stats
   const totalTickets = tickets.length;
-  const overdueTickets = tickets.filter((t) => t.slaStatus === 'breached').length;
-  const resolvedTickets = tickets.filter((t) => t.status === 'Resolved' || t.status === 'Closed').length;
-  const slaCompliance = Math.round(((totalTickets - overdueTickets) / totalTickets) * 100);
+  const overdueTickets = tickets.filter((t) => t.sla_status === 'breached').length;
+  const resolvedTickets = tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length;
+  const slaCompliance = totalTickets > 0 
+    ? Math.round(((totalTickets - overdueTickets) / totalTickets) * 100)
+    : 100;
+
+  // Calculate avg resolution time (simplified - you can enhance this)
+  const avgResolutionTime = "4.2h"; // TODO: Calculate from resolved tickets
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Loading...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-card rounded-lg border border-border p-6 h-32 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,7 +131,7 @@ export default function Dashboard() {
         />
         <StatsCard
           title="Avg. Resolution Time"
-          value="4.2h"
+          value={avgResolutionTime}
           change="-15min from last week"
           changeType="positive"
           icon={Clock}
@@ -76,11 +149,17 @@ export default function Dashboard() {
               View all
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ticketGroups.slice(0, 4).map((group) => (
-              <GroupedIssueCard key={group.id} group={group} />
-            ))}
-          </div>
+          {ticketGroups.length === 0 ? (
+            <div className="bg-card rounded-lg border border-border p-8 text-center">
+              <p className="text-muted-foreground">No grouped issues at the moment</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ticketGroups.slice(0, 4).map((group) => (
+                <GroupedIssueCard key={group.id} group={group} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Activity Feed */}

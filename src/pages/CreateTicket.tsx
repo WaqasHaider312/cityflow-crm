@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,30 +12,136 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { issueTypes, suppliers, cities, users } from '@/lib/mockData';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
+
+// Hardcoded for now (will come from parent app later)
+const suppliers = [
+  "Supplier A - FastTech Electronics",
+  "Supplier B - Global Goods Co",
+  "Supplier C - Prime Parts Ltd",
+  "Supplier D - QuickShip Solutions",
+  "Supplier E - Metro Distributors",
+  "Supplier F - Digital Dynamics",
+  "Supplier G - ValueMart",
+  "Supplier H - Crystal Imports",
+  "Supplier I - TechZone",
+  "Supplier J - Home Essentials",
+  "Supplier K - Allied Trading",
+];
+
+const cities = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan"];
 
 export default function CreateTicket() {
   const navigate = useNavigate();
-  const [issueType, setIssueType] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [issueTypes, setIssueTypes] = useState([]);
+  const [users, setUsers] = useState([]);
+  
+  // Form state
+  const [issueTypeId, setIssueTypeId] = useState('');
   const [supplier, setSupplier] = useState('');
   const [city, setCity] = useState('');
-  const [priority, setPriority] = useState('Normal');
+  const [priority, setPriority] = useState('normal');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
 
-  const selectedIssueType = issueTypes.find((t) => t.name === issueType);
-  const autoAssignee = selectedIssueType
-    ? users.find((u) => u.team === selectedIssueType.team)?.name || 'Unassigned'
-    : null;
+  const selectedIssueType = issueTypes.find((t) => t.id === issueTypeId);
+  
+  // Calculate auto-assignee
+  const autoAssignee = selectedIssueType?.team_members?.[0]?.full_name || 
+                       selectedIssueType?.team?.name || 
+                       'Auto-assigned';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch issue types
+  useEffect(() => {
+    const fetchIssueTypes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('issue_types')
+          .select(`
+            *,
+            team:teams(id, name),
+            team_members:profiles!default_team_id(id, full_name)
+          `)
+          .eq('is_active', true)
+          .order('name');
+
+        if (error) throw error;
+        setIssueTypes(data || []);
+      } catch (error) {
+        console.error('Error fetching issue types:', error);
+        toast({ title: "Error loading issue types", variant: "destructive" });
+      }
+    };
+
+    fetchIssueTypes();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Ticket Created",
-      description: "Your ticket has been created successfully.",
-    });
-    navigate('/tickets');
+    setLoading(true);
+
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Calculate SLA due date
+      const slaHours = selectedIssueType.default_sla_hours;
+      const slaDueAt = new Date();
+      slaDueAt.setHours(slaDueAt.getHours() + slaHours);
+
+      // Get team and assignee from issue type
+      const teamId = selectedIssueType.default_team_id;
+      
+      // Find first member of that team to assign
+      const { data: teamMembers } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('team_id', teamId)
+        .limit(1);
+
+      const assignedTo = teamMembers?.[0]?.id || null;
+
+      // Create ticket
+      const { data: ticket, error } = await supabase
+        .from('tickets')
+        .insert({
+          subject,
+          description,
+          issue_type_id: issueTypeId,
+          supplier_name: supplier,
+          city,
+          priority,
+          status: 'new',
+          assigned_to: assignedTo,
+          team_id: teamId,
+          sla_due_at: slaDueAt.toISOString(),
+          sla_status: 'on-track',
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Created",
+        description: `Ticket #${ticket.ticket_number} has been created successfully.`,
+      });
+      
+      navigate('/tickets');
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast({ 
+        title: "Error creating ticket", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,13 +164,13 @@ export default function CreateTicket() {
           {/* Issue Type */}
           <div className="space-y-2">
             <Label htmlFor="issueType">Issue Type *</Label>
-            <Select value={issueType} onValueChange={setIssueType}>
+            <Select value={issueTypeId} onValueChange={setIssueTypeId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select issue type" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 {issueTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.name}>
+                  <SelectItem key={type.id} value={type.id}>
                     <span className="flex items-center gap-2">
                       <span>{type.icon}</span>
                       <span>{type.name}</span>
@@ -113,25 +219,25 @@ export default function CreateTicket() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-popover">
-                <SelectItem value="Low">
+                <SelectItem value="low">
                   <span className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-muted-foreground" />
                     Low
                   </span>
                 </SelectItem>
-                <SelectItem value="Normal">
+                <SelectItem value="normal">
                   <span className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-primary" />
                     Normal
                   </span>
                 </SelectItem>
-                <SelectItem value="High">
+                <SelectItem value="high">
                   <span className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-warning" />
                     High
                   </span>
                 </SelectItem>
-                <SelectItem value="Critical">
+                <SelectItem value="critical">
                   <span className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-danger" />
                     Critical
@@ -180,7 +286,7 @@ export default function CreateTicket() {
         </div>
 
         {/* Auto-assignment Preview */}
-        {issueType && (
+        {issueTypeId && selectedIssueType && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Will be assigned to:</span>
@@ -188,7 +294,7 @@ export default function CreateTicket() {
             </div>
             <div className="flex items-center justify-between text-sm mt-2">
               <span className="text-muted-foreground">Expected resolution:</span>
-              <span className="font-medium text-foreground">{selectedIssueType?.defaultSLA}</span>
+              <span className="font-medium text-foreground">{selectedIssueType.default_sla_hours} hours</span>
             </div>
           </div>
         )}
@@ -200,9 +306,9 @@ export default function CreateTicket() {
           </Button>
           <Button
             type="submit"
-            disabled={!issueType || !supplier || !city || !subject || !description}
+            disabled={!issueTypeId || !supplier || !city || !subject || !description || loading}
           >
-            Create Ticket
+            {loading ? 'Creating...' : 'Create Ticket'}
           </Button>
         </div>
       </form>

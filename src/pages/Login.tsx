@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,16 +18,39 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate login
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    toast({
-      title: "Welcome back!",
-      description: "You've successfully logged in.",
-    });
+      if (error) throw error;
 
-    setIsLoading(false);
-    navigate('/dashboard');
+      // Get user profile to check role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, role')
+        .eq('id', data.user.id)
+        .single();
+
+      toast({
+        title: "Welcome back!",
+        description: profile?.full_name 
+          ? `Welcome, ${profile.full_name}` 
+          : "You've successfully logged in.",
+      });
+
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid email or password",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,9 +60,9 @@ export default function Login() {
         <div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary-foreground flex items-center justify-center">
-              <span className="text-primary font-bold">CT</span>
+              <span className="text-primary font-bold">CF</span>
             </div>
-            <span className="text-primary-foreground font-semibold text-xl">CityTeam</span>
+            <span className="text-primary-foreground font-semibold text-xl">CityFlow</span>
           </div>
         </div>
 
@@ -51,7 +76,7 @@ export default function Login() {
         </div>
 
         <div className="text-primary-foreground/60 text-sm">
-          © 2024 CityTeam. All rights reserved.
+          © 2024 CityFlow. All rights reserved.
         </div>
       </div>
 
@@ -61,9 +86,9 @@ export default function Login() {
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 justify-center mb-8">
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">CT</span>
+              <span className="text-primary-foreground font-bold">CF</span>
             </div>
-            <span className="text-foreground font-semibold text-xl">CityTeam</span>
+            <span className="text-foreground font-semibold text-xl">CityFlow</span>
           </div>
 
           <div className="text-center">
@@ -130,7 +155,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Demo credentials: Use any email and password
+            Need help? Contact your system administrator
           </p>
         </div>
       </div>

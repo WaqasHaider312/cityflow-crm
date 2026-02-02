@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Pencil, Trash2, Save } from 'lucide-react';
-import { issueTypes, teams } from '@/lib/mockData';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 import {
   Table,
   TableBody,
@@ -33,6 +33,111 @@ import { Label } from '@/components/ui/label';
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState('issue-types');
   const [issueTypeDialogOpen, setIssueTypeDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  // State for data
+  const [issueTypes, setIssueTypes] = useState([]);
+  const [teams, setTeams] = useState([]);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    icon: '',
+    default_sla_hours: '',
+    default_team_id: ''
+  });
+
+  // Fetch issue types
+  const fetchIssueTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('issue_types')
+        .select(`
+          *,
+          team:teams(name)
+        `)
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setIssueTypes(data || []);
+    } catch (error) {
+      console.error('Error fetching issue types:', error);
+      toast({ title: "Error loading issue types", variant: "destructive" });
+    }
+  };
+
+  // Fetch teams
+  const fetchTeams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setTeams(data || []);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+      toast({ title: "Error loading teams", variant: "destructive" });
+    }
+  };
+
+  // Load data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchIssueTypes(), fetchTeams()]);
+      setLoading(false);
+    };
+    loadData();
+  }, []);
+
+  // Create issue type
+  const handleCreateIssueType = async () => {
+    try {
+      const { error } = await supabase
+        .from('issue_types')
+        .insert({
+          name: formData.name,
+          icon: formData.icon,
+          default_sla_hours: parseInt(formData.default_sla_hours),
+          default_team_id: formData.default_team_id || null,
+          is_active: true
+        });
+
+      if (error) throw error;
+
+      toast({ title: "Issue Type Created" });
+      setIssueTypeDialogOpen(false);
+      setFormData({ name: '', icon: '', default_sla_hours: '', default_team_id: '' });
+      fetchIssueTypes(); // Refresh list
+    } catch (error) {
+      console.error('Error creating issue type:', error);
+      toast({ title: "Error creating issue type", variant: "destructive" });
+    }
+  };
+
+  // Delete issue type
+  const handleDeleteIssueType = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this issue type?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('issue_types')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({ title: "Issue Type Deleted" });
+      fetchIssueTypes(); // Refresh list
+    } catch (error) {
+      console.error('Error deleting issue type:', error);
+      toast({ title: "Error deleting issue type", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -74,24 +179,43 @@ export default function AdminSettings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {issueTypes.map((type) => (
-                  <TableRow key={type.id}>
-                    <TableCell className="text-2xl">{type.icon}</TableCell>
-                    <TableCell className="font-medium">{type.name}</TableCell>
-                    <TableCell>{type.defaultSLA}</TableCell>
-                    <TableCell>{type.team}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="w-8 h-8">
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-danger hover:text-danger">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Loading...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : issueTypes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No issue types found. Create one to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  issueTypes.map((type) => (
+                    <TableRow key={type.id}>
+                      <TableCell className="text-2xl">{type.icon}</TableCell>
+                      <TableCell className="font-medium">{type.name}</TableCell>
+                      <TableCell>{type.default_sla_hours} hours</TableCell>
+                      <TableCell>{type.team?.name || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="w-8 h-8">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-8 h-8 text-danger hover:text-danger"
+                            onClick={() => handleDeleteIssueType(type.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -290,40 +414,54 @@ export default function AdminSettings() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input placeholder="e.g., Return Request" />
+              <Input 
+                placeholder="e.g., Return Request" 
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">
               <Label>Icon</Label>
-              <Input placeholder="📦" />
+              <Input 
+                placeholder="📦" 
+                value={formData.icon}
+                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label>Default SLA</Label>
-              <Select>
+              <Label>Default SLA (hours)</Label>
+              <Select 
+                value={formData.default_sla_hours}
+                onValueChange={(value) => setFormData({ ...formData, default_sla_hours: value })}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="2h">2 hours</SelectItem>
-                  <SelectItem value="4h">4 hours</SelectItem>
-                  <SelectItem value="6h">6 hours</SelectItem>
-                  <SelectItem value="12h">12 hours</SelectItem>
-                  <SelectItem value="24h">24 hours</SelectItem>
-                  <SelectItem value="48h">48 hours</SelectItem>
+                  <SelectItem value="2">2 hours</SelectItem>
+                  <SelectItem value="4">4 hours</SelectItem>
+                  <SelectItem value="6">6 hours</SelectItem>
+                  <SelectItem value="12">12 hours</SelectItem>
+                  <SelectItem value="24">24 hours</SelectItem>
+                  <SelectItem value="48">48 hours</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>Auto-assign Team</Label>
-              <Select>
+              <Select
+                value={formData.default_team_id}
+                onValueChange={(value) => setFormData({ ...formData, default_team_id: value })}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select team" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
                   {teams.map((team) => (
-                    <SelectItem key={team.id} value={team.name}>{team.name}</SelectItem>
+                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -334,10 +472,7 @@ export default function AdminSettings() {
             <Button variant="outline" onClick={() => setIssueTypeDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              toast({ title: "Issue Type Created" });
-              setIssueTypeDialogOpen(false);
-            }}>
+            <Button onClick={handleCreateIssueType}>
               <Save className="w-4 h-4 mr-2" />
               Save
             </Button>

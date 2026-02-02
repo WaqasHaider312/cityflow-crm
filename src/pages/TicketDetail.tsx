@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, ArrowUpRight, Users, X, Eye, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
 import { SLATimer } from '@/components/common/SLATimer';
-import { tickets, users } from '@/lib/mockData';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 import {
   Dialog,
   DialogContent,
@@ -27,12 +27,277 @@ import {
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  
+  const [ticket, setTicket] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [users, setUsers] = useState([]);
+  
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [escalationNote, setEscalationNote] = useState('');
 
-  const ticket = tickets.find((t) => t.id === id);
+  // Fetch ticket and comments
+  useEffect(() => {
+    const fetchTicketData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch ticket
+        const { data: ticketData, error: ticketError } = await supabase
+          .from('tickets')
+          .select(`
+            *,
+            issue_type:issue_types(name, icon),
+            assigned_user:profiles!assigned_to(id, full_name),
+            team:teams(name),
+            watchers:ticket_watchers(user:profiles(full_name))
+          `)
+          .eq('id', id)
+          .single();
+
+        if (ticketError) throw ticketError;
+
+        // Fetch comments
+        const { data: commentsData, error: commentsError } = await supabase
+          .from('comments')
+          .select(`
+            *,
+            user:profiles(full_name)
+          `)
+          .eq('ticket_id', id)
+          .order('created_at', { ascending: true });
+
+        if (commentsError) throw commentsError;
+
+        // Fetch all users for reassignment
+        const { data: usersData, error: usersError } = await supabase
+          .from('profiles')
+          .select('id, full_name, team:teams(name)')
+          .eq('is_active', true)
+          .order('full_name');
+
+        if (usersError) throw usersError;
+
+        setTicket(ticketData);
+        setComments(commentsData || []);
+        setUsers(usersData || []);
+      } catch (error) {
+        console.error('Error fetching ticket:', error);
+        toast({ title: "Error loading ticket", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) fetchTicketData();
+  }, [id]);
+
+  // Format SLA remaining time
+  const formatSLARemaining = () => {
+    if (!ticket?.sla_due_at) return '0h';
+    
+    const now = new Date();
+    const dueAt = new Date(ticket.sla_due_at);
+    const timeRemaining = dueAt.getTime() - now.getTime();
+    const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+    const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (timeRemaining < 0) {
+      return `-${Math.abs(hoursRemaining)}h`;
+    }
+    return `${hoursRemaining}h ${minutesRemaining}m`;
+  };
+
+  const handleResolve = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('tickets')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          resolved_by: user.id
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Resolved",
+        description: `Ticket #${ticket.ticket_number} has been marked as resolved.`,
+      });
+
+      // Refresh ticket
+      const { data } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      setTicket({ ...ticket, ...data });
+    } catch (error) {
+      console.error('Error resolving ticket:', error);
+      toast({ title: "Error resolving ticket", variant: "destructive" });
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+
+    try {
+      setSubmitting(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('comments')
+        .insert({
+          ticket_id: id,
+          user_id: user.id,
+          content: newComment,
+          is_internal: isInternal
+        })
+        .select(`
+          *,
+          user:profiles(full_name)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Comment Added",
+        description: isInternal ? "Internal note added." : "Reply sent to supplier.",
+      });
+
+      setComments([...comments, data]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast({ title: "Error adding comment", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReassign = async () => {
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_to: selectedUser })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({ title: "Ticket Reassigned" });
+      setReassignDialogOpen(false);
+
+      // Refresh ticket
+      const { data } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          assigned_user:profiles!assigned_to(id, full_name)
+        `)
+        .eq('id', id)
+        .single();
+      
+      setTicket({ ...ticket, ...data });
+    } catch (error) {
+      console.error('Error reassigning ticket:', error);
+      toast({ title: "Error reassigning ticket", variant: "destructive" });
+    }
+  };
+
+  const handleEscalate = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('tickets')
+        .update({
+          is_escalated: true,
+          escalated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Add escalation comment
+      if (escalationNote.trim()) {
+        await supabase.from('comments').insert({
+          ticket_id: id,
+          user_id: user.id,
+          content: `[ESCALATED] ${escalationNote}`,
+          is_internal: true
+        });
+      }
+
+      toast({ title: "Ticket Escalated", description: "The team has been notified." });
+      setEscalateDialogOpen(false);
+      setEscalationNote('');
+
+      // Refresh ticket
+      const { data } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      setTicket({ ...ticket, ...data });
+    } catch (error) {
+      console.error('Error escalating ticket:', error);
+      toast({ title: "Error escalating ticket", variant: "destructive" });
+    }
+  };
+
+  const handleClose = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('tickets')
+        .update({
+          status: 'closed',
+          closed_at: new Date().toISOString(),
+          closed_by: user.id
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({ title: "Ticket Closed" });
+
+      // Refresh ticket
+      const { data } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      setTicket({ ...ticket, ...data });
+    } catch (error) {
+      console.error('Error closing ticket:', error);
+      toast({ title: "Error closing ticket", variant: "destructive" });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   if (!ticket) {
     return (
@@ -46,21 +311,8 @@ export default function TicketDetail() {
     );
   }
 
-  const handleResolve = () => {
-    toast({
-      title: "Ticket Resolved",
-      description: `Ticket #${ticket.id} has been marked as resolved.`,
-    });
-  };
-
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
-    toast({
-      title: "Comment Added",
-      description: isInternal ? "Internal note added." : "Reply sent to supplier.",
-    });
-    setNewComment('');
-  };
+  const slaRemaining = formatSLARemaining();
+  const watchers = ticket.watchers?.map(w => w.user.full_name) || [];
 
   return (
     <div className="space-y-6">
@@ -75,25 +327,25 @@ export default function TicketDetail() {
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-muted-foreground">#{ticket.id}</span>
+              <span className="text-sm font-medium text-muted-foreground">#{ticket.ticket_number}</span>
               <StatusBadge status={ticket.status} />
               <PriorityBadge priority={ticket.priority} />
             </div>
             <h1 className="text-xl font-bold text-foreground">{ticket.subject}</h1>
           </div>
 
-          {ticket.status !== 'Resolved' && ticket.status !== 'Closed' && (
-            <SLATimer remaining={ticket.slaRemaining} status={ticket.slaStatus} />
+          {ticket.status !== 'resolved' && ticket.status !== 'closed' && (
+            <SLATimer remaining={slaRemaining} status={ticket.sla_status} />
           )}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border">
-          <Button onClick={handleResolve}>
+          <Button onClick={handleResolve} disabled={ticket.status === 'resolved' || ticket.status === 'closed'}>
             <CheckCircle2 className="w-4 h-4 mr-2" />
             Resolve
           </Button>
-          <Button variant="outline" onClick={() => setEscalateDialogOpen(true)}>
+          <Button variant="outline" onClick={() => setEscalateDialogOpen(true)} disabled={ticket.is_escalated}>
             <ArrowUpRight className="w-4 h-4 mr-2" />
             Escalate
           </Button>
@@ -101,7 +353,7 @@ export default function TicketDetail() {
             <Users className="w-4 h-4 mr-2" />
             Reassign
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleClose} disabled={ticket.status === 'closed'}>
             <X className="w-4 h-4 mr-2" />
             Close
           </Button>
@@ -118,11 +370,11 @@ export default function TicketDetail() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Issue Type</span>
-                <span className="font-medium text-foreground">{ticket.issueType}</span>
+                <span className="font-medium text-foreground">{ticket.issue_type?.name}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Supplier</span>
-                <span className="font-medium text-foreground">{ticket.supplier}</span>
+                <span className="font-medium text-foreground">{ticket.supplier_name}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">City</span>
@@ -130,7 +382,9 @@ export default function TicketDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
-                <span className="text-foreground">{ticket.createdAt}</span>
+                <span className="text-foreground">
+                  {new Date(ticket.created_at).toLocaleDateString()}
+                </span>
               </div>
             </div>
           </div>
@@ -143,18 +397,20 @@ export default function TicketDetail() {
                 <span className="text-muted-foreground">Assigned To</span>
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                    {ticket.assignedTo.split(' ').map(n => n[0]).join('')}
+                    {ticket.assigned_user?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'}
                   </div>
-                  <span className="font-medium text-foreground">{ticket.assignedTo}</span>
+                  <span className="font-medium text-foreground">
+                    {ticket.assigned_user?.full_name || 'Unassigned'}
+                  </span>
                 </div>
               </div>
               
-              {ticket.watchers.length > 0 && (
+              {watchers.length > 0 && (
                 <div className="flex justify-between items-start">
                   <span className="text-muted-foreground">Watchers</span>
                   <div className="flex flex-wrap gap-1 justify-end">
-                    {ticket.watchers.map((watcher) => (
-                      <span key={watcher} className="text-xs px-2 py-1 bg-secondary rounded-full">
+                    {watchers.map((watcher, i) => (
+                      <span key={i} className="text-xs px-2 py-1 bg-secondary rounded-full">
                         {watcher}
                       </span>
                     ))}
@@ -182,31 +438,33 @@ export default function TicketDetail() {
 
             {/* Comments */}
             <div className="p-4 space-y-4 max-h-96 overflow-y-auto scrollbar-thin">
-              {ticket.comments.length === 0 ? (
+              {comments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No comments yet. Start the conversation below.
                 </p>
               ) : (
-                ticket.comments.map((comment) => (
+                comments.map((comment) => (
                   <div
                     key={comment.id}
                     className={`p-4 rounded-lg ${
-                      comment.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-secondary'
+                      comment.is_internal ? 'bg-warning/10 border border-warning/20' : 'bg-secondary'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                          {comment.author.split(' ').map(n => n[0]).join('')}
+                          {comment.user.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>
-                        <span className="font-medium text-sm text-foreground">{comment.author}</span>
-                        {comment.isInternal && (
+                        <span className="font-medium text-sm text-foreground">{comment.user.full_name}</span>
+                        {comment.is_internal && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning">
                             Internal
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(comment.created_at).toLocaleString()}
+                      </span>
                     </div>
                     <p className="text-sm text-foreground">{comment.content}</p>
                   </div>
@@ -244,8 +502,8 @@ export default function TicketDetail() {
               />
 
               <div className="flex justify-end">
-                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
-                  {isInternal ? 'Add Note' : 'Send Reply'}
+                <Button onClick={handleAddComment} disabled={!newComment.trim() || submitting}>
+                  {submitting ? 'Adding...' : isInternal ? 'Add Note' : 'Send Reply'}
                 </Button>
               </div>
             </div>
@@ -263,14 +521,14 @@ export default function TicketDetail() {
             </DialogDescription>
           </DialogHeader>
 
-          <Select>
+          <Select value={selectedUser} onValueChange={setSelectedUser}>
             <SelectTrigger>
               <SelectValue placeholder="Select team member" />
             </SelectTrigger>
             <SelectContent className="bg-popover">
               {users.map((user) => (
-                <SelectItem key={user.id} value={user.name}>
-                  {user.name} ({user.team})
+                <SelectItem key={user.id} value={user.id}>
+                  {user.full_name} ({user.team?.name || 'No team'})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -280,10 +538,7 @@ export default function TicketDetail() {
             <Button variant="outline" onClick={() => setReassignDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              toast({ title: "Ticket Reassigned" });
-              setReassignDialogOpen(false);
-            }}>
+            <Button onClick={handleReassign} disabled={!selectedUser}>
               Reassign
             </Button>
           </DialogFooter>
@@ -296,31 +551,22 @@ export default function TicketDetail() {
           <DialogHeader>
             <DialogTitle>Escalate Ticket</DialogTitle>
             <DialogDescription>
-              Select a Tier 2 team to escalate this ticket to.
+              Add a note explaining why this ticket is being escalated.
             </DialogDescription>
           </DialogHeader>
 
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select team" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              <SelectItem value="logistics-tier2">Logistics Tier 2</SelectItem>
-              <SelectItem value="finance-tier2">Finance Tier 2</SelectItem>
-              <SelectItem value="operations">Operations Management</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Textarea placeholder="Add escalation note..." rows={3} />
+          <Textarea 
+            placeholder="Add escalation note..." 
+            rows={3} 
+            value={escalationNote}
+            onChange={(e) => setEscalationNote(e.target.value)}
+          />
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEscalateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              toast({ title: "Ticket Escalated", description: "The team has been notified." });
-              setEscalateDialogOpen(false);
-            }}>
+            <Button onClick={handleEscalate}>
               Escalate
             </Button>
           </DialogFooter>
