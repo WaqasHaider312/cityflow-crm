@@ -117,7 +117,7 @@ export default function CreateTicket() {
           assigned_to: assignedTo,
           team_id: teamId,
           sla_due_at: slaDueAt.toISOString(),
-          sla_status: 'on-track',
+          sla_status: 'on_track',
           created_by: user.id
         })
         .select()
