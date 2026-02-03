@@ -63,7 +63,7 @@ export default function UserManagement() {
         .from('profiles')
         .select(`
           *,
-          team:teams(id, name)
+          team:teams!fk_team(id, name)
         `)
         .order('full_name');
 
