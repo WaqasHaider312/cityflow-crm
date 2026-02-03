@@ -58,7 +58,7 @@ export default function GroupDetail() {
             *,
             issue_type:issue_types(name, icon),
             assigned_user:profiles!assigned_to(full_name),
-            team:teams!default_team_id(name)
+            team:teams!tickets_team_id_fkey(name)
           `)
           .eq('ticket_group_id', id)
           .order('created_at', { ascending: false });
@@ -177,7 +177,7 @@ export default function GroupDetail() {
           *,
           issue_type:issue_types(name, icon),
           assigned_user:profiles!assigned_to(full_name),
-          team:teams!default_team_id(name)
+          team:teams!tickets_team_id_fkey(name)
         `)
         .eq('ticket_group_id', id)
         .order('created_at', { ascending: false });
