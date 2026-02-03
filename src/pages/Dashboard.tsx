@@ -27,7 +27,7 @@ export default function Dashboard() {
             *,
             issue_type:issue_types(name, icon),
             assigned_user:profiles!assigned_to(full_name),
-            team:teams(name)
+            team:teams!tickets_team_id_fkey(name)
 
           `)
           .order('created_at', { ascending: false });
