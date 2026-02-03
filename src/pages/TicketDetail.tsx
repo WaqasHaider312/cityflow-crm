@@ -54,7 +54,7 @@ export default function TicketDetail() {
             *,
             issue_type:issue_types(name, icon),
             assigned_user:profiles!assigned_to(id, full_name),
-            team:teams(name),
+            team:teams!tickets_team_id_fkey(name),
             watchers:ticket_watchers(user:profiles(full_name))
           `)
           .eq('id', id)
@@ -77,7 +77,7 @@ export default function TicketDetail() {
         // Fetch all users for reassignment
         const { data: usersData, error: usersError } = await supabase
           .from('profiles')
-          .select('id, full_name, team:teams(name)')
+          .select('id, full_name, team:teams!fk_team(name)')
           .eq('is_active', true)
           .order('full_name');
 
