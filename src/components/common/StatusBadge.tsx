@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-type Status = 'New' | 'Assigned' | 'In Progress' | 'Pending' | 'Resolved' | 'Closed';
+type Status = 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed';
 
 interface StatusBadgeProps {
   status: Status;
@@ -8,12 +8,12 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<Status, { label: string; className: string }> = {
-  'New': { label: 'New', className: 'bg-primary text-primary-foreground' },
-  'Assigned': { label: 'Assigned', className: 'bg-info text-info-foreground' },
-  'In Progress': { label: 'In Progress', className: 'bg-warning text-warning-foreground' },
-  'Pending': { label: 'Pending', className: 'bg-warning/20 text-warning' },
-  'Resolved': { label: 'Resolved', className: 'bg-success text-success-foreground' },
-  'Closed': { label: 'Closed', className: 'bg-muted text-muted-foreground' },
+  'new': { label: 'New', className: 'bg-primary text-primary-foreground' },
+  'assigned': { label: 'Assigned', className: 'bg-info text-info-foreground' },
+  'in_progress': { label: 'In Progress', className: 'bg-warning text-warning-foreground' },
+  'pending': { label: 'Pending', className: 'bg-warning/20 text-warning' },
+  'resolved': { label: 'Resolved', className: 'bg-success text-success-foreground' },
+  'closed': { label: 'Closed', className: 'bg-muted text-muted-foreground' },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
