@@ -53,7 +53,7 @@ export default function Reports() {
           .select(`
             *,
             issue_type:issue_types(name),
-            team:teams(name)
+            team:teams!team_id(name)
           `)
           .gte('created_at', startDate.toISOString())
           .order('created_at', { ascending: true });
