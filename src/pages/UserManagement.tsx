@@ -107,44 +107,41 @@ export default function UserManagement() {
   };
 
   const handleCreateUser = async () => {
-    if (!fullName || !email || !selectedTeam || !selectedRole) {
-      toast({ title: "Please fill all fields", variant: "destructive" });
-      return;
-    }
+  if (!fullName || !email || !selectedTeam || !selectedRole) {
+    toast({ title: "Please fill all fields", variant: "destructive" });
+    return;
+  }
 
-    try {
-      // Note: In production, this should be done via a serverless function
-      // that creates the auth.users entry with admin privileges
-      // For now, we'll just create the profile
-      
-      const { error } = await supabase
-        .from('profiles')
-        .insert({
-          email,
-          full_name: fullName,
-          team_id: selectedTeam,
-          role: selectedRole,
-          is_active: true
-        });
-
-      if (error) throw error;
-
-      toast({ 
-        title: "User Created", 
-        description: "User profile created. Admin must create auth account separately." 
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .insert({
+        id: crypto.randomUUID(),
+        email,
+        full_name: fullName,
+        team_id: selectedTeam,
+        role: selectedRole,
+        is_active: true
       });
-      
-      setAddUserDialogOpen(false);
-      setFullName('');
-      setEmail('');
-      setSelectedTeam('');
-      setSelectedRole('');
-      fetchData(); // Refresh
-    } catch (error) {
-      console.error('Error creating user:', error);
-      toast({ title: "Error creating user", variant: "destructive" });
-    }
-  };
+
+    if (error) throw error;
+
+    toast({ 
+      title: "Profile Created", 
+      description: "Create auth user in Supabase dashboard" 
+    });
+    
+    setAddUserDialogOpen(false);
+    setFullName('');
+    setEmail('');
+    setSelectedTeam('');
+    setSelectedRole('');
+    fetchData();
+  } catch (error) {
+    console.error('Error creating user:', error);
+    toast({ title: "Error creating user", variant: "destructive" });
+  }
+};
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
