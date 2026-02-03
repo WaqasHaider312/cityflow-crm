@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 
-type Priority = 'Low' | 'Normal' | 'High' | 'Critical';
+type Priority = 'low' | 'normal' | 'high' | 'critical';
+
 
 interface PriorityBadgeProps {
   priority: Priority;
@@ -8,10 +9,10 @@ interface PriorityBadgeProps {
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string; dot?: boolean }> = {
-  'Low': { label: 'Low', className: 'bg-muted text-muted-foreground' },
-  'Normal': { label: 'Normal', className: 'bg-primary/10 text-primary' },
-  'High': { label: 'High', className: 'bg-warning/15 text-warning' },
-  'Critical': { label: 'Critical', className: 'bg-danger/15 text-danger', dot: true },
+  'low': { label: 'Low', className: 'bg-muted text-muted-foreground' },
+  'normal': { label: 'Normal', className: 'bg-primary/10 text-primary' },
+  'high': { label: 'High', className: 'bg-warning/15 text-warning' },
+  'critical': { label: 'Critical', className: 'bg-danger/15 text-danger', dot: true },
 };
 
 export function PriorityBadge({ priority, className }: PriorityBadgeProps) {
