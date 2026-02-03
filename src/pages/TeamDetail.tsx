@@ -47,7 +47,7 @@ export default function TeamDetail() {
             *,
             issue_type:issue_types(name, icon),
             assigned_user:profiles!assigned_to(full_name),
-            team:teams!team_id(name)
+            team:teams!tickets_team_id_fkey(name)
           `)
           .eq('team_id', id)
           .in('status', ['new', 'assigned', 'in_progress', 'pending'])

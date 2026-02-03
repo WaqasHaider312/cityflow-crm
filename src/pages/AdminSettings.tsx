@@ -54,7 +54,7 @@ export default function AdminSettings() {
         .from('issue_types')
         .select(`
           *,
-          team:teams!default_team_id(name)
+          team:teams!issue_types_default_team_id_fkey(name)
         `)
         .eq('is_active', true)
         .order('name');
