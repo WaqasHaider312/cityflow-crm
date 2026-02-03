@@ -61,8 +61,8 @@ export default function CreateTicket() {
           .from('issue_types')
           .select(`
             *,
-            team:teams(id, name),
-            team_members:profiles!default_team_id(id, full_name)
+            team:teams!team_id(name),
+            team_members:profiles!fk_team(full_name)
           `)
           .eq('is_active', true)
           .order('name');
