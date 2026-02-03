@@ -18,7 +18,7 @@ export default function Teams() {
           .from('teams')
           .select(`
             *,
-            members:profiles(id),
+            members:profiles!fk_team(id),
             tickets:tickets!team_id(id, status)
           `)
           .eq('is_active', true)
