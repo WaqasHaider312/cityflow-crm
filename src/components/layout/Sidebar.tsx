@@ -11,6 +11,7 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tickets, ticketGroups } from '@/lib/mockData';
@@ -148,6 +149,13 @@ export function Sidebar() {
           to="/admin/users"
           icon={<Shield className="w-5 h-5" />}
           label="User Management"
+          collapsed={collapsed}
+        />
+
+        <SidebarLink
+          to="/regions"
+          icon={<MapPin className="w-5 h-5" />}
+          label="Regions"
           collapsed={collapsed}
         />
       </nav>
