@@ -17,6 +17,8 @@ import Reports from "@/pages/Reports";
 import AdminSettings from "@/pages/AdminSettings";
 import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/NotFound";
+import RegionsManagement from '@/pages/RegionsManagement';
+
 
 const queryClient = new QueryClient();
 
@@ -47,6 +49,7 @@ const App = () => (
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/users" element={<UserManagement />} />
           </Route>
+          <Route path="/regions" element={<RegionsManagement />} />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
