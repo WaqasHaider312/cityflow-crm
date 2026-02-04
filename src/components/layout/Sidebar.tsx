@@ -165,12 +165,6 @@ export function Sidebar() {
           label="City Mapping"
           collapsed={collapsed}
         />
-       <SidebarLink
-          to="/admin/teams"
-          icon={<Users className="w-5 h-5" />}
-          label="Teams"
-          collapsed={collapsed}
-        />
 
       </nav>
 
