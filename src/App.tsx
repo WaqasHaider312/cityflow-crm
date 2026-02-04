@@ -48,9 +48,9 @@ const App = () => (
             <Route path="/reports" element={<Reports />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/regions" element={<RegionsManagement />} />
           </Route>
-          <Route path="/regions" element={<RegionsManagement />} />
-          
+
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
