@@ -18,6 +18,8 @@ import AdminSettings from "@/pages/AdminSettings";
 import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/NotFound";
 import RegionsManagement from '@/pages/RegionsManagement';
+import CityMapping from '@/pages/CityMapping';
+import TeamsManagement from '@/pages/TeamsManagement';
 
 
 const queryClient = new QueryClient();
@@ -49,6 +51,9 @@ const App = () => (
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/regions" element={<RegionsManagement />} />
+            <Route path="/cities" element={<CityMapping />} />
+            <Route path="/admin/teams" element={<TeamsManagement />} />
+
           </Route>
 
           {/* Catch-all */}

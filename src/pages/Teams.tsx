@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Users, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
 
 export default function Teams() {
   const navigate = useNavigate();
@@ -96,6 +97,15 @@ export default function Teams() {
                 </span>
                 <span className="font-medium text-foreground">{team.memberCount}</span>
               </div>
+              {/* ADD THIS */}
+              {team.region?.name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Region</span>
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                    {team.region.name}
+                  </Badge>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Active Tickets</span>
                 <span className="font-medium text-foreground">{team.activeTickets}</span>

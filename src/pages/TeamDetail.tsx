@@ -116,6 +116,11 @@ export default function TeamDetail() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">{team.name}</h1>
               <p className="text-muted-foreground mt-1">{team.description}</p>
+              {team.region?.name && (
+                <Badge variant="outline" className="bg-primary/10 text-primary">
+                  📍 {team.region.name}
+                </Badge>
+              )}
             </div>
           </div>
           <Button>

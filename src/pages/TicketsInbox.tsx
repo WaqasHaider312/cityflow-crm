@@ -9,11 +9,9 @@ import { BulkActionsBar } from '@/components/tickets/BulkActionsBar';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 
-// Keep UI Status type
 type Status = 'All' | 'New' | 'Assigned' | 'In Progress' | 'Pending' | 'Resolved' | 'Closed';
 type Priority = 'All' | 'Low' | 'Normal' | 'High' | 'Critical';
 
-// Map UI to DB values
 const statusMap: Record<string, string> = {
   'All': 'All',
   'New': 'new',
@@ -36,6 +34,7 @@ export default function TicketsInbox() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<Status>('All');
@@ -46,8 +45,32 @@ export default function TicketsInbox() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
-    fetchTickets();
-  }, [status, priority, city, issueType]);
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchTickets();
+    }
+  }, [status, priority, city, issueType, currentUser]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*, region:regions(id, name)')
+        .eq('id', user.id)
+        .single();
+
+      setCurrentUser(profile);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      toast({ title: "Error loading user", variant: "destructive" });
+    }
+  };
 
   const fetchTickets = async () => {
     try {
@@ -59,11 +82,17 @@ export default function TicketsInbox() {
           *,
           issue_type:issue_types(id, name, icon),
           assigned_user:profiles!assigned_to(full_name),
-          team:teams!team_id(name)
+          team:teams!team_id(name),
+          region:regions(name)
         `)
         .order('created_at', { ascending: false });
 
-      // Apply filters with mapped values
+      // Filter by region for city managers (non-super admins)
+      if (currentUser?.region_id && !currentUser?.is_super_admin) {
+        query = query.eq('region_id', currentUser.region_id);
+      }
+
+      // Apply filters
       if (status !== 'All') {
         query = query.eq('status', statusMap[status]);
       }
@@ -71,7 +100,7 @@ export default function TicketsInbox() {
         query = query.eq('priority', priorityMap[priority]);
       }
       if (city !== 'All') {
-        query = query.eq('city', city);
+        query = query.eq('supplier_city', city);
       }
 
       const { data, error } = await query;
@@ -198,6 +227,9 @@ export default function TicketsInbox() {
           <h1 className="text-2xl font-bold text-foreground">Tickets</h1>
           <p className="text-muted-foreground mt-1">
             {filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''} found
+            {currentUser?.region && !currentUser?.is_super_admin && (
+              <> in {currentUser.region.name}</>
+            )}
           </p>
         </div>
         <Button onClick={() => navigate('/tickets/create')}>

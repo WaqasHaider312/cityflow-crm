@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,67 +15,132 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 
-// Hardcoded for now (will come from parent app later)
-const suppliers = [
-  "Supplier A - FastTech Electronics",
-  "Supplier B - Global Goods Co",
-  "Supplier C - Prime Parts Ltd",
-  "Supplier D - QuickShip Solutions",
-  "Supplier E - Metro Distributors",
-  "Supplier F - Digital Dynamics",
-  "Supplier G - ValueMart",
-  "Supplier H - Crystal Imports",
-  "Supplier I - TechZone",
-  "Supplier J - Home Essentials",
-  "Supplier K - Allied Trading",
-];
-
-const cities = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan"];
-
 export default function CreateTicket() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [issueTypes, setIssueTypes] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [cities, setCities] = useState([]);
   
   // Form state
   const [issueTypeId, setIssueTypeId] = useState('');
   const [supplier, setSupplier] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [city, setCity] = useState('');
   const [priority, setPriority] = useState('normal');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
 
-  const selectedIssueType = issueTypes.find((t) => t.id === issueTypeId);
-  
-  // Calculate auto-assignee
-  const autoAssignee = selectedIssueType?.team_members?.[0]?.full_name || 
-                       selectedIssueType?.team?.name || 
-                       'Auto-assigned';
+  // Auto-assignment preview
+  const [assignmentPreview, setAssignmentPreview] = useState(null);
 
-  // Fetch issue types
   useEffect(() => {
-    const fetchIssueTypes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('issue_types')
-          .select(`
-            *,
-            team:teams!default_team_id(name)
-          `)
-          .eq('is_active', true)
-          .order('name');
+    fetchInitialData();
+    
+    // Get params from URL (from parent app)
+    const supplierIdParam = searchParams.get('supplier_id');
+    const supplierNameParam = searchParams.get('supplier_name');
+    const cityParam = searchParams.get('city');
+    
+    if (supplierIdParam) setSupplierId(supplierIdParam);
+    if (supplierNameParam) setSupplier(supplierNameParam);
+    if (cityParam) setCity(cityParam);
+  }, [searchParams]);
 
-        if (error) throw error;
-        setIssueTypes(data || []);
+  useEffect(() => {
+    if (issueTypeId && city) {
+      calculateAssignment();
+    }
+  }, [issueTypeId, city]);
+
+  const fetchInitialData = async () => {
+    try {
+      // Fetch issue types
+      const { data: issueTypesData, error: issueError } = await supabase
+        .from('issue_types')
+        .select(`
+          *,
+          team:teams!default_team_id(name),
+          assignee:profiles!default_assignee_id(full_name)
+        `)
+        .eq('is_active', true)
+        .order('name');
+
+      if (issueError) throw issueError;
+
+      // Fetch cities
+      const { data: citiesData, error: citiesError } = await supabase
+        .from('city_region_mapping')
+        .select('city_name')
+        .order('city_name');
+
+      if (citiesError) throw citiesError;
+
+      setIssueTypes(issueTypesData || []);
+      setCities(citiesData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ title: "Error loading form data", variant: "destructive" });
+    }
+  };
+
+  const calculateAssignment = async () => {
+  try {
+    const selectedIssueType = issueTypes.find(t => t.id === issueTypeId);
+    if (!selectedIssueType) return;
+
+    // Get region for this city
+    const { data: cityMapping } = await supabase
+      .from('city_region_mapping')
+      .select('region_id')
+      .eq('city_name', city)
+      .single();
+
+    if (!cityMapping?.region_id) {
+      setAssignmentPreview(null);
+      return;
+    }
+
+    // Get region details
+    const { data: region } = await supabase
+      .from('regions')
+      .select('id, name, manager_id')
+      .eq('id', cityMapping.region_id)
+      .single();
+
+    // Get manager name
+    let managerName = 'No manager';
+    if (region?.manager_id) {
+      const { data: manager } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', region.manager_id)
+        .single();
+      
+      managerName = manager?.full_name || 'No manager';
+    }
+
+    // Get city team for this region (Tier 2)
+    const { data: tier2Team } = await supabase
+      .from('teams')
+      .select('id, name')
+      .eq('team_type', 'city_team')
+      .eq('region_id', cityMapping.region_id)
+      .maybeSingle();
+
+    setAssignmentPreview({
+      tier1_assignee: selectedIssueType.assignee?.full_name || 'Unassigned',
+      tier1_team: selectedIssueType.team?.name || 'No team',
+      region: region?.name || 'Unknown region',
+      city_manager: managerName,
+      tier2_team: tier2Team?.name || 'No city team',
+      sla_hours: selectedIssueType.default_sla_hours
+    });
       } catch (error) {
-        console.error('Error fetching issue types:', error);
-        toast({ title: "Error loading issue types", variant: "destructive" });
+        console.error('Error calculating assignment:', error);
+        setAssignmentPreview(null);
       }
     };
-
-    fetchIssueTypes();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,22 +151,38 @@ export default function CreateTicket() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      const selectedIssueType = issueTypes.find(t => t.id === issueTypeId);
+      if (!selectedIssueType) throw new Error('Issue type not found');
+
+      // Get region mapping for city
+      const { data: cityMapping } = await supabase
+        .from('city_region_mapping')
+        .select('region_id')
+        .eq('city_name', city)
+        .single();
+
+      if (!cityMapping) {
+        toast({
+          title: "City not mapped",
+          description: "This city needs to be mapped to a region first.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Get city team for Tier 2
+      const { data: tier2Team } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('team_type', 'city_team')
+        .eq('region_id', cityMapping.region_id)
+        .single();
+
       // Calculate SLA due date
       const slaHours = selectedIssueType.default_sla_hours;
       const slaDueAt = new Date();
       slaDueAt.setHours(slaDueAt.getHours() + slaHours);
-
-      // Get team and assignee from issue type
-      const teamId = selectedIssueType.default_team_id;
-      
-      // Find first member of that team to assign
-      const { data: teamMembers } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('team_id', teamId)
-        .limit(1);
-
-      const assignedTo = teamMembers?.[0]?.id || null;
 
       // Create ticket
       const { data: ticket, error } = await supabase
@@ -111,11 +192,15 @@ export default function CreateTicket() {
           description,
           issue_type_id: issueTypeId,
           supplier_name: supplier,
+          supplier_id: supplierId || null,
           city,
+          supplier_city: city,
+          region_id: cityMapping.region_id,
           priority,
           status: 'new',
-          assigned_to: assignedTo,
-          team_id: teamId,
+          assigned_to: selectedIssueType.default_assignee_id,
+          team_id: selectedIssueType.default_team_id,
+          tier2_team_id: tier2Team?.id || null,
           sla_due_at: slaDueAt.toISOString(),
           sla_status: 'on_track',
           created_by: user.id
@@ -182,17 +267,13 @@ export default function CreateTicket() {
 
           {/* Supplier */}
           <div className="space-y-2">
-            <Label htmlFor="supplier">Supplier *</Label>
-            <Select value={supplier} onValueChange={setSupplier}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select supplier" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {suppliers.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="supplier">Supplier Name *</Label>
+            <Input
+              id="supplier"
+              placeholder="Enter supplier name"
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+            />
           </div>
 
           {/* City */}
@@ -204,7 +285,9 @@ export default function CreateTicket() {
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 {cities.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c.city_name} value={c.city_name}>
+                    {c.city_name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -285,15 +368,34 @@ export default function CreateTicket() {
         </div>
 
         {/* Auto-assignment Preview */}
-        {issueTypeId && selectedIssueType && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Will be assigned to:</span>
-              <span className="font-medium text-foreground">{autoAssignee}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-muted-foreground">Expected resolution:</span>
-              <span className="font-medium text-foreground">{selectedIssueType.default_sla_hours} hours</span>
+        {assignmentPreview && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2">
+            <h3 className="font-semibold text-foreground">Auto-Assignment Preview</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Tier 1 (Specialist):</span>
+                <p className="font-medium text-foreground">{assignmentPreview.tier1_assignee}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Tier 1 (Team):</span>
+                <p className="font-medium text-foreground">{assignmentPreview.tier1_team}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Region:</span>
+                <p className="font-medium text-foreground">{assignmentPreview.region}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">City Manager:</span>
+                <p className="font-medium text-foreground">{assignmentPreview.city_manager}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Tier 2 (Escalation):</span>
+                <p className="font-medium text-foreground">{assignmentPreview.tier2_team}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">SLA:</span>
+                <p className="font-medium text-foreground">{assignmentPreview.sla_hours} hours</p>
+              </div>
             </div>
           </div>
         )}

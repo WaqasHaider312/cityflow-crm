@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MapPin,
+   Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tickets, ticketGroups } from '@/lib/mockData';
@@ -158,6 +159,19 @@ export function Sidebar() {
           label="Regions"
           collapsed={collapsed}
         />
+        <SidebarLink
+          to="/cities"
+          icon={<Map className="w-5 h-5" />}
+          label="City Mapping"
+          collapsed={collapsed}
+        />
+       <SidebarLink
+          to="/admin/teams"
+          icon={<Users className="w-5 h-5" />}
+          label="Teams"
+          collapsed={collapsed}
+        />
+
       </nav>
 
       {/* Bottom Section */}

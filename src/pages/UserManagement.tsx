@@ -41,6 +41,7 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [regions, setRegions] = useState([]);
   const [search, setSearch] = useState('');
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   
@@ -49,6 +50,8 @@ export default function UserManagement() {
   const [email, setEmail] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -63,7 +66,8 @@ export default function UserManagement() {
         .from('profiles')
         .select(`
           *,
-          team:teams!fk_team(id, name)
+          team:teams!fk_team(id, name),
+          region:regions(id, name)
         `)
         .order('full_name');
 
@@ -78,8 +82,17 @@ export default function UserManagement() {
 
       if (teamsError) throw teamsError;
 
+      // Fetch regions
+      const { data: regionsData, error: regionsError } = await supabase
+        .from('regions')
+        .select('*')
+        .order('name');
+
+      if (regionsError) throw regionsError;
+
       setUsers(usersData || []);
       setTeams(teamsData || []);
+      setRegions(regionsData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({ title: "Error loading users", variant: "destructive" });
@@ -96,52 +109,70 @@ export default function UserManagement() {
 
   const roleDisplay = {
     'super_admin': 'Super Admin',
-    'team_admin': 'Team Admin',
+    'admin': 'Admin',
     'member': 'Team Member',
   };
 
   const roleColors = {
     'super_admin': 'bg-danger/15 text-danger',
-    'team_admin': 'bg-info/15 text-info',
+    'admin': 'bg-info/15 text-info',
     'member': 'bg-muted text-muted-foreground',
   };
 
   const handleCreateUser = async () => {
-  if (!fullName || !email || !selectedTeam || !selectedRole) {
-    toast({ title: "Please fill all fields", variant: "destructive" });
-    return;
-  }
+    if (!fullName || !email || !selectedTeam || !selectedRole) {
+      toast({ title: "Please fill all fields", variant: "destructive" });
+      return;
+    }
 
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .insert({
-        id: crypto.randomUUID(),
-        email,
-        full_name: fullName,
-        team_id: selectedTeam,
-        role: selectedRole,
-        is_active: true
+    // Admin/super_admin should have region if they're city managers
+    if ((selectedRole === 'admin' || selectedRole === 'super_admin') && !selectedRegion) {
+      toast({ 
+        title: "Region required for admins", 
+        description: "Admins need a region to manage",
+        variant: "destructive" 
       });
+      return;
+    }
 
-    if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: crypto.randomUUID(),
+          email,
+          full_name: fullName,
+          team_id: selectedTeam,
+          role: selectedRole,
+          region_id: selectedRegion || null,
+          is_super_admin: isSuperAdmin,
+          is_active: true
+        });
 
-    toast({ 
-      title: "Profile Created", 
-      description: "Create auth user in Supabase dashboard" 
-    });
-    
-    setAddUserDialogOpen(false);
+      if (error) throw error;
+
+      toast({ 
+        title: "Profile Created", 
+        description: "Create auth user in Supabase dashboard" 
+      });
+      
+      setAddUserDialogOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      toast({ title: "Error creating user", variant: "destructive" });
+    }
+  };
+
+  const resetForm = () => {
     setFullName('');
     setEmail('');
     setSelectedTeam('');
     setSelectedRole('');
-    fetchData();
-  } catch (error) {
-    console.error('Error creating user:', error);
-    toast({ title: "Error creating user", variant: "destructive" });
-  }
-};
+    setSelectedRegion('');
+    setIsSuperAdmin(false);
+  };
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
@@ -153,7 +184,7 @@ export default function UserManagement() {
       if (error) throw error;
 
       toast({ title: "Role Updated" });
-      fetchData(); // Refresh
+      fetchData();
     } catch (error) {
       console.error('Error updating role:', error);
       toast({ title: "Error updating role", variant: "destructive" });
@@ -170,7 +201,7 @@ export default function UserManagement() {
       if (error) throw error;
 
       toast({ title: "User Deactivated" });
-      fetchData(); // Refresh
+      fetchData();
     } catch (error) {
       console.error('Error deactivating user:', error);
       toast({ title: "Error deactivating user", variant: "destructive" });
@@ -226,6 +257,7 @@ export default function UserManagement() {
               <TableHead>User</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Team</TableHead>
+              <TableHead>Region</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-16">Actions</TableHead>
@@ -234,7 +266,7 @@ export default function UserManagement() {
           <TableBody>
             {filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
@@ -248,14 +280,24 @@ export default function UserManagement() {
                           {user.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'}
                         </span>
                       </div>
-                      <span className="font-medium text-foreground">{user.full_name}</span>
+                      <div>
+                        <span className="font-medium text-foreground">{user.full_name}</span>
+                        {user.is_super_admin && (
+                          <Badge variant="outline" className="ml-2 text-xs bg-danger/10 text-danger border-danger/20">
+                            Super Admin
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{user.email}</TableCell>
                   <TableCell>{user.team?.name || 'No team'}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {user.region?.name || '-'}
+                  </TableCell>
                   <TableCell>
                     <Badge className={roleColors[user.role]} variant="secondary">
-                      {user.role === 'super_admin' && <Shield className="w-3 h-3 mr-1" />}
+                      {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
                       {roleDisplay[user.role]}
                     </Badge>
                   </TableCell>
@@ -282,8 +324,7 @@ export default function UserManagement() {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => {
-                          // Cycle through roles for demo
-                          const roles = ['member', 'team_admin', 'super_admin'];
+                          const roles = ['member', 'admin', 'super_admin'];
                           const currentIndex = roles.indexOf(user.role);
                           const nextRole = roles[(currentIndex + 1) % roles.length];
                           handleUpdateRole(user.id, nextRole);
@@ -321,7 +362,7 @@ export default function UserManagement() {
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Full Name</Label>
+              <Label>Full Name *</Label>
               <Input 
                 placeholder="Enter full name" 
                 value={fullName}
@@ -330,7 +371,7 @@ export default function UserManagement() {
             </div>
 
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>Email *</Label>
               <Input 
                 type="email" 
                 placeholder="email@cityteam.com" 
@@ -340,7 +381,21 @@ export default function UserManagement() {
             </div>
 
             <div className="space-y-2">
-              <Label>Team</Label>
+              <Label>Role *</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="member">Team Member</SelectItem>
+                  <SelectItem value="admin">Admin (City Manager)</SelectItem>
+                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Team *</Label>
               <Select value={selectedTeam} onValueChange={setSelectedTeam}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select team" />
@@ -353,19 +408,41 @@ export default function UserManagement() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="member">Team Member</SelectItem>
-                  <SelectItem value="team_admin">Team Admin</SelectItem>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {(selectedRole === 'admin' || selectedRole === 'super_admin') && (
+              <div className="space-y-2">
+                <Label>Region *</Label>
+                <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select region" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {regions.map((region) => (
+                      <SelectItem key={region.id} value={region.id}>
+                        {region.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Region this admin will manage
+                </p>
+              </div>
+            )}
+
+            {selectedRole === 'super_admin' && (
+              <div className="flex items-center gap-2 p-3 bg-danger/5 border border-danger/20 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="superAdmin"
+                  checked={isSuperAdmin}
+                  onChange={(e) => setIsSuperAdmin(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="superAdmin" className="text-sm text-foreground">
+                  Grant full system access (Super Admin)
+                </label>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
