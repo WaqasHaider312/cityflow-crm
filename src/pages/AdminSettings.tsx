@@ -101,47 +101,46 @@ export default function AdminSettings() {
     }
   };
 
-  const fetchRoutingRules = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('routing_rules')
-        .select(`
-          *,
-          issue_type:issue_types(name),
-          region:regions(name),
-          assign_to_team:teams!routing_rules_assign_to_team_id_fkey(name),
-          assign_to_user:profiles!routing_rules_assign_to_user_id_fkey(full_name),
-          tier2_user:profiles!routing_rules_tier2_user_id_fkey(full_name)
-        `)
-        .eq('is_active', true)
-        .order('priority_order');
+ const fetchRoutingRules = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('routing_rules')
+      .select(`
+        *,
+        issue_type:issue_types(name),
+        assign_to_team:teams!routing_rules_assign_to_team_id_fkey(name),
+        assign_to_user:profiles!routing_rules_assign_to_user_id_fkey(full_name),
+        tier2_user:profiles!routing_rules_tier2_user_id_fkey(full_name)
+      `)
+      .eq('is_active', true)
+      .order('priority_order');
 
-      if (error) throw error;
-      setRoutingRules(data || []);
-    } catch (error) {
-      console.error('Error fetching routing rules:', error);
-      toast({ title: "Error loading routing rules", variant: "destructive" });
-    }
-  };
+    if (error) throw error;
+    setRoutingRules(data || []);
+  } catch (error) {
+    console.error('Error fetching routing rules:', error);
+    toast({ title: "Error loading routing rules", variant: "destructive" });
+  }
+};
 
-  const fetchSlaRules = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('sla_rules')
-        .select(`
-          *,
-          issue_type:issue_types(name),
-          tier2_team:teams!sla_rules_tier2_team_id_fkey(name)
-        `)
-        .order('priority');
+const fetchSlaRules = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('sla_rules')
+      .select(`
+        *,
+        issue_type:issue_types(name),
+        tier2_team:teams!sla_rules_tier2_team_id_fkey(name)
+      `)
+      .order('priority');
 
-      if (error) throw error;
-      setSlaRules(data || []);
-    } catch (error) {
-      console.error('Error fetching SLA rules:', error);
-      toast({ title: "Error loading SLA rules", variant: "destructive" });
-    }
-  };
+    if (error) throw error;
+    setSlaRules(data || []);
+  } catch (error) {
+    console.error('Error fetching SLA rules:', error);
+    toast({ title: "Error loading SLA rules", variant: "destructive" });
+  }
+};
 
   const fetchTeams = async () => {
     try {
@@ -475,8 +474,8 @@ export default function AdminSettings() {
 
   // Filter users by selected team
   const filteredUsersByTeam = issueTypeForm.default_team_id
-    ? users.filter(u => u.team_id === issueTypeForm.default_team_id)
-    : users;
+  ? users.filter(u => u.team_id === issueTypeForm.default_team_id)
+  : users;
 
   const filteredTier2Users = routingRuleForm.region_id
     ? users.filter(u => u.region_id === routingRuleForm.region_id)
