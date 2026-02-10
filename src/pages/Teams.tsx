@@ -64,12 +64,11 @@ export default function Teams() {
         .from('teams')
         .select(`
           *,
-          region:regions(id, name),
+          region:regions!teams_region_id_fkey(id, name),
           members:profiles!fk_team(id),
           tickets:tickets!team_id(id, status)
         `)
         .eq('is_active', true)
-        .order('name');
 
       if (error) throw error;
 
