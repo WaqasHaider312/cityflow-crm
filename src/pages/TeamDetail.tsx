@@ -17,50 +17,51 @@ export default function TeamDetail() {
   const [teamTickets, setTeamTickets] = useState([]);
 
   useEffect(() => {
-    const fetchTeamData = async () => {
-      try {
-        setLoading(true);
+   const fetchTeamData = async () => {
+  try {
+    setLoading(true);
 
+    // Fix: Remove the teams join, just get the team
         const { data: teamData, error: teamError } = await supabase
-          .from('teams')
-          .select('*, teams!tickets_team_id_fkey(*)')
-          .eq('id', id)
-          .single();
+        .from('teams')
+        .select('*')
+        .eq('id', id)
+        .single();
 
         if (teamError) throw teamError;
 
         const { data: membersData, error: membersError } = await supabase
-          .from('profiles')
-          .select('*, regions!profiles_region_id_fkey(*)')
-          .eq('team_id', id)
-          .eq('is_active', true)
-          .order('full_name');
+        .from('profiles')
+        .select('*, regions!profiles_region_id_fkey(*)')
+        .eq('team_id', id)
+        .eq('is_active', true)
+        .order('full_name');
 
         if (membersError) throw membersError;
 
         const { data: ticketsData, error: ticketsError } = await supabase
-          .from('tickets')
-          .select(`
+        .from('tickets')
+        .select(`
             *,
             issue_type:issue_types(name, icon),
-            assigned_user:profiles!assigned_to(full_name),
-            team:teams(name)
-          `)
-          .eq('team_id', id)
-          .in('status', ['new', 'assigned', 'in_progress', 'pending'])
-          .order('created_at', { ascending: false });
+            assigned_user:profiles!tickets_assigned_to_fkey(full_name),
+            team:teams!tickets_team_id_fkey(name)
+        `)
+        .eq('team_id', id)
+        .in('status', ['new', 'assigned', 'in_progress', 'pending'])
+        .order('created_at', { ascending: false });
 
         if (ticketsError) throw ticketsError;
 
         setTeam(teamData);
         setTeamMembers(membersData || []);
         setTeamTickets(ticketsData || []);
-      } catch (error) {
+    } catch (error) {
         console.error('Error fetching team data:', error);
         toast({ title: "Error loading team", variant: "destructive" });
-      } finally {
+    } finally {
         setLoading(false);
-      }
+    }
     };
 
     if (id) fetchTeamData();
