@@ -12,7 +12,7 @@ import GroupDetail from "@/pages/GroupDetail";
 import TicketDetail from "@/pages/TicketDetail";
 import CreateTicket from "@/pages/CreateTicket";
 import Teams from "@/pages/Teams";
-import TeamDetail from "@/pages/TeamDetail";
+import TeamDetail from "./pages/TeamDetail";
 import Reports from "@/pages/Reports";
 import AdminSettings from "@/pages/AdminSettings";
 import UserManagement from "@/pages/UserManagement";
