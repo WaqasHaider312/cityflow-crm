@@ -109,13 +109,13 @@ export default function UserManagement() {
 
   const roleDisplay = {
     'super_admin': 'Super Admin',
-    'admin': 'Admin',
+    'team_admin': 'Admin',
     'member': 'Team Member',
   };
 
   const roleColors = {
     'super_admin': 'bg-danger/15 text-danger',
-    'admin': 'bg-info/15 text-info',
+    'team_admin': 'bg-info/15 text-info',
     'member': 'bg-muted text-muted-foreground',
   };
 
@@ -126,7 +126,7 @@ export default function UserManagement() {
     }
 
     // Admin/super_admin should have region if they're city managers
-    if ((selectedRole === 'admin' || selectedRole === 'super_admin') && !selectedRegion) {
+    if ((selectedRole === 'team_admin' || selectedRole === 'super_admin') && !selectedRegion) {
       toast({ 
         title: "Region required for admins", 
         description: "Admins need a region to manage",
@@ -297,7 +297,7 @@ export default function UserManagement() {
                   </TableCell>
                   <TableCell>
                     <Badge className={roleColors[user.role]} variant="secondary">
-                      {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
+                      {user.role === 'team_admin' && <Shield className="w-3 h-3 mr-1" />}
                       {roleDisplay[user.role]}
                     </Badge>
                   </TableCell>
@@ -324,7 +324,7 @@ export default function UserManagement() {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => {
-                          const roles = ['member', 'admin', 'super_admin'];
+                          const roles = ['member', 'team_admin', 'super_admin'];
                           const currentIndex = roles.indexOf(user.role);
                           const nextRole = roles[(currentIndex + 1) % roles.length];
                           handleUpdateRole(user.id, nextRole);
@@ -388,7 +388,7 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="member">Team Member</SelectItem>
-                  <SelectItem value="admin">Admin (City Manager)</SelectItem>
+                  <SelectItem value="team_admin">Admin (City Manager)</SelectItem>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                 </SelectContent>
               </Select>
@@ -408,7 +408,7 @@ export default function UserManagement() {
               </Select>
             </div>
 
-            {(selectedRole === 'admin' || selectedRole === 'super_admin') && (
+            {(selectedRole === 'team_admin' || selectedRole === 'super_admin') && (
               <div className="space-y-2">
                 <Label>Region *</Label>
                 <Select value={selectedRegion} onValueChange={setSelectedRegion}>
