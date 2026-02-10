@@ -31,7 +31,7 @@ export default function TeamDetail() {
 
         const { data: membersData, error: membersError } = await supabase
           .from('profiles')
-          .select('*, region:regions(name)')
+          .select('*, regions!profiles_region_id_fkey(*)')
           .eq('team_id', id)
           .eq('is_active', true)
           .order('full_name');
