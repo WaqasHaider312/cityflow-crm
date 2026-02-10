@@ -67,7 +67,7 @@ export default function UserManagement() {
         .select(`
           *,
           team:teams!fk_team(id, name),
-          region:regions(id, name)
+          region:regions!profiles_region_id_fkey(id, name)
         `)
         .order('full_name');
 
