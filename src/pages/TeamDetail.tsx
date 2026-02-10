@@ -23,7 +23,7 @@ export default function TeamDetail() {
 
         const { data: teamData, error: teamError } = await supabase
           .from('teams')
-          .select('*')
+          .select('*, teams!tickets_team_id_fkey(*)')
           .eq('id', id)
           .single();
 
