@@ -240,8 +240,8 @@ export default function AdminSettings() {
         icon: issueTypeForm.icon || null,
         description: issueTypeForm.description || null,
         default_sla_hours: parseInt(issueTypeForm.default_sla_hours),
-        default_team_id: issueTypeForm.default_team_id || null,
-        default_assignee_id: issueTypeForm.default_assignee_id || null,
+        default_team_id: issueTypeForm.default_team_id === 'none' ? null : (issueTypeForm.default_team_id || null),
+        default_assignee_id: issueTypeForm.default_assignee_id === 'none' ? null : (issueTypeForm.default_assignee_id || null),
         is_active: true
       };
 
@@ -330,18 +330,18 @@ export default function AdminSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const ruleData = {
+      
+  const ruleData = {
         name: routingRuleForm.name,
-        issue_type_id: routingRuleForm.issue_type_id || null,
-        region_id: routingRuleForm.region_id || null,
-        assign_to_team_id: routingRuleForm.assign_to_team_id || null,
-        assign_to_user_id: routingRuleForm.assign_to_user_id || null,
-        tier2_user_id: routingRuleForm.tier2_user_id || null,
+        issue_type_id: routingRuleForm.issue_type_id === 'none' ? null : (routingRuleForm.issue_type_id || null),
+        region_id: routingRuleForm.region_id === 'none' ? null : (routingRuleForm.region_id || null),
+        assign_to_team_id: routingRuleForm.assign_to_team_id === 'none' ? null : (routingRuleForm.assign_to_team_id || null),
+        assign_to_user_id: routingRuleForm.assign_to_user_id === 'none' ? null : (routingRuleForm.assign_to_user_id || null),
+        tier2_user_id: routingRuleForm.tier2_user_id === 'none' ? null : (routingRuleForm.tier2_user_id || null),
         enable_auto_grouping: routingRuleForm.enable_auto_grouping,
         priority_order: parseInt(routingRuleForm.priority_order),
         is_active: true
       };
-
       if (editingRoutingRule) {
         const { error } = await supabase
           .from('routing_rules')
@@ -419,11 +419,11 @@ export default function AdminSettings() {
   const handleSaveSlaRule = async () => {
     try {
       const ruleData = {
-        issue_type_id: slaRuleForm.issue_type_id || null,
+        issue_type_id: slaRuleForm.issue_type_id === 'none' ? null : slaRuleForm.issue_type_id,
         priority: slaRuleForm.priority,
         sla_hours: parseInt(slaRuleForm.sla_hours),
         escalation_threshold_percent: parseInt(slaRuleForm.escalation_threshold_percent),
-        tier2_team_id: slaRuleForm.tier2_team_id || null
+        tier2_team_id: slaRuleForm.tier2_team_id === 'none' ? null : slaRuleForm.tier2_team_id
       };
 
       if (editingSlaRule) {
@@ -809,7 +809,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select team" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No team</SelectItem>
+                  <SelectItem value="none">No team</SelectItem>
                   {teams.map((team) => (
                     <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                   ))}
@@ -827,7 +827,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select person" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No assignee</SelectItem>
+                  <SelectItem value="none">No assignee</SelectItem>
                   {filteredUsersByTeam.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name} {user.team?.name ? `(${user.team.name})` : ''}
@@ -916,7 +916,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select team" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No team</SelectItem>
+                  <SelectItem value="none">No team</SelectItem>
                   {teams.map((team) => (
                     <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                   ))}
@@ -934,7 +934,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select person" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No individual assignee</SelectItem>
+                  <SelectItem value="none">No individual assignee</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name} {user.region?.name ? `(${user.region.name})` : ''}
@@ -954,7 +954,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select watcher" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No watcher</SelectItem>
+                  <SelectItem value="none">No watcher</SelectItem>
                   {filteredTier2Users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name} {user.region?.name ? `(${user.region.name})` : ''}
@@ -1098,7 +1098,7 @@ export default function AdminSettings() {
                   <SelectValue placeholder="Select team" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No team</SelectItem>
+                  <SelectItem value="none">No team</SelectItem>
                   {teams.map((team) => (
                     <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                   ))}
