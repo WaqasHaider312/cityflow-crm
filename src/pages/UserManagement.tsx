@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Pencil, Shield, Ban, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Pencil, Shield, Ban, MoreHorizontal, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -44,6 +44,9 @@ export default function UserManagement() {
   const [regions, setRegions] = useState([]);
   const [search, setSearch] = useState('');
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [changeRoleDialogOpen, setChangeRoleDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   
   // Form state
   const [fullName, setFullName] = useState('');
@@ -165,6 +168,45 @@ export default function UserManagement() {
     }
   };
 
+  const handleEditUser = async () => {
+    if (!selectedUser || !selectedTeam || !selectedRole) {
+      toast({ title: "Please fill all fields", variant: "destructive" });
+      return;
+    }
+
+    if ((selectedRole === 'team_admin' || selectedRole === 'super_admin') && !selectedRegion) {
+      toast({ 
+        title: "Region required for admins", 
+        description: "Admins need a region to manage",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          team_id: selectedTeam,
+          role: selectedRole,
+          region_id: selectedRegion || null,
+          is_super_admin: isSuperAdmin,
+        })
+        .eq('id', selectedUser.id);
+
+      if (error) throw error;
+
+      toast({ title: "User Updated" });
+      setEditUserDialogOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast({ title: "Error updating user", variant: "destructive" });
+    }
+  };
+
   const resetForm = () => {
     setFullName('');
     setEmail('');
@@ -172,18 +214,40 @@ export default function UserManagement() {
     setSelectedRole('');
     setSelectedRegion('');
     setIsSuperAdmin(false);
+    setSelectedUser(null);
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const openEditDialog = (user) => {
+    setSelectedUser(user);
+    setFullName(user.full_name);
+    setEmail(user.email);
+    setSelectedTeam(user.team_id);
+    setSelectedRole(user.role);
+    setSelectedRegion(user.region_id || '');
+    setIsSuperAdmin(user.is_super_admin);
+    setEditUserDialogOpen(true);
+  };
+
+  const openChangeRoleDialog = (user) => {
+    setSelectedUser(user);
+    setSelectedRole(user.role);
+    setChangeRoleDialogOpen(true);
+  };
+
+  const handleUpdateRole = async () => {
+    if (!selectedUser || !selectedRole) return;
+
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
+        .update({ role: selectedRole })
+        .eq('id', selectedUser.id);
 
       if (error) throw error;
 
       toast({ title: "Role Updated" });
+      setChangeRoleDialogOpen(false);
+      resetForm();
       fetchData();
     } catch (error) {
       console.error('Error updating role:', error);
@@ -205,6 +269,23 @@ export default function UserManagement() {
     } catch (error) {
       console.error('Error deactivating user:', error);
       toast({ title: "Error deactivating user", variant: "destructive" });
+    }
+  };
+
+  const handleReactivate = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_active: true })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast({ title: "User Reactivated" });
+      fetchData();
+    } catch (error) {
+      console.error('Error reactivating user:', error);
+      toast({ title: "Error reactivating user", variant: "destructive" });
     }
   };
 
@@ -319,27 +400,32 @@ export default function UserManagement() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-popover">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEditDialog(user)}>
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          const roles = ['member', 'team_admin', 'super_admin'];
-                          const currentIndex = roles.indexOf(user.role);
-                          const nextRole = roles[(currentIndex + 1) % roles.length];
-                          handleUpdateRole(user.id, nextRole);
-                        }}>
+                        <DropdownMenuItem onClick={() => openChangeRoleDialog(user)}>
                           <Shield className="w-4 h-4 mr-2" />
                           Change Role
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-danger"
-                          onClick={() => handleDeactivate(user.id)}
-                        >
-                          <Ban className="w-4 h-4 mr-2" />
-                          Deactivate
-                        </DropdownMenuItem>
+                        {user.is_active ? (
+                          <DropdownMenuItem 
+                            className="text-danger"
+                            onClick={() => handleDeactivate(user.id)}
+                          >
+                            <Ban className="w-4 h-4 mr-2" />
+                            Deactivate
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem 
+                            className="text-success"
+                            onClick={() => handleReactivate(user.id)}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Reactivate
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -451,6 +537,147 @@ export default function UserManagement() {
             </Button>
             <Button onClick={handleCreateUser}>
               Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user information
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input 
+                placeholder="Enter full name" 
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input 
+                type="email" 
+                value={email}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="member">Team Member</SelectItem>
+                  <SelectItem value="team_admin">Admin (City Manager)</SelectItem>
+                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Team *</Label>
+              <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(selectedRole === 'team_admin' || selectedRole === 'super_admin') && (
+              <div className="space-y-2">
+                <Label>Region *</Label>
+                <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select region" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {regions.map((region) => (
+                      <SelectItem key={region.id} value={region.id}>
+                        {region.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {selectedRole === 'super_admin' && (
+              <div className="flex items-center gap-2 p-3 bg-danger/5 border border-danger/20 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="editSuperAdmin"
+                  checked={isSuperAdmin}
+                  onChange={(e) => setIsSuperAdmin(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="editSuperAdmin" className="text-sm text-foreground">
+                  Grant full system access (Super Admin)
+                </label>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditUser}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={changeRoleDialogOpen} onOpenChange={setChangeRoleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change User Role</DialogTitle>
+            <DialogDescription>
+              Select a new role for {selectedUser?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="member">Team Member</SelectItem>
+                  <SelectItem value="team_admin">Admin (City Manager)</SelectItem>
+                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeRoleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateRole}>
+              Update Role
             </Button>
           </DialogFooter>
         </DialogContent>
