@@ -317,7 +317,7 @@ export default function RegionsManagement() {
                   <SelectValue placeholder="Select city manager (optional)" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">No manager</SelectItem>
+                  <SelectItem value="Cityadminhere">No manager</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name} ({user.email})
