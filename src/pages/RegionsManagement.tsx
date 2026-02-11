@@ -64,7 +64,7 @@ export default function RegionsManagement() {
         .from('profiles')
         .select('id, full_name, email, role')
         .eq('is_active', true)
-        .in('role', ['admin', 'super_admin'])
+        .in('role', ['team_admin', 'super_admin'])
         .order('full_name');
 
       if (usersError) throw usersError;
