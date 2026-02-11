@@ -83,14 +83,34 @@ export default function Dashboard() {
   };
 
   // Calculate stats
-  const totalTickets = tickets.length;
-  const overdueTickets = tickets.filter((t) => t.sla_status === 'breached').length;
-  const resolvedTickets = tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length;
-  const slaCompliance = totalTickets > 0 
-    ? Math.round(((totalTickets - overdueTickets) / totalTickets) * 100)
-    : 100;
+    const totalTickets = tickets.length;
+    const overdueTickets = tickets.filter((t) => t.sla_status === 'breached').length;
+    const resolvedTickets = tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length;
+    const slaCompliance = totalTickets > 0 
+      ? Math.round(((totalTickets - overdueTickets) / totalTickets) * 100)
+      : 100;
 
-  const avgResolutionTime = "4.2h"; // TODO: Calculate from resolved tickets
+    // Calculate average resolution time
+    const calculateAvgResolutionTime = () => {
+      const resolved = tickets.filter(t => t.resolved_at && t.created_at);
+      if (resolved.length === 0) return '-';
+      
+      const totalMinutes = resolved.reduce((sum, ticket) => {
+        const created = new Date(ticket.created_at);
+        const resolvedDate = new Date(ticket.resolved_at);
+        const diffMs = resolvedDate.getTime() - created.getTime();
+        return sum + (diffMs / (1000 * 60)); // Convert to minutes
+      }, 0);
+      
+      const avgMinutes = Math.round(totalMinutes / resolved.length);
+      
+      if (avgMinutes < 60) return `${avgMinutes}m`;
+      const hours = Math.floor(avgMinutes / 60);
+      const mins = avgMinutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    };
+
+    const avgResolutionTime = calculateAvgResolutionTime();
 
   const canViewAll = currentUser?.is_super_admin || currentUser?.role === 'super_admin';
 
@@ -160,8 +180,6 @@ export default function Dashboard() {
         <StatsCard
           title="Total Tickets"
           value={totalTickets}
-          change="+12% from last week"
-          changeType="positive"
           icon={Ticket}
           iconColor="text-primary"
         />
@@ -176,16 +194,12 @@ export default function Dashboard() {
         <StatsCard
           title="SLA Compliance"
           value={`${slaCompliance}%`}
-          change="+5% from last week"
-          changeType="positive"
           icon={CheckCircle2}
           iconColor="text-success"
         />
         <StatsCard
           title="Avg. Resolution Time"
           value={avgResolutionTime}
-          change="-15min from last week"
-          changeType="positive"
           icon={Clock}
           iconColor="text-warning"
         />
