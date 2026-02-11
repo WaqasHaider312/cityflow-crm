@@ -12,12 +12,12 @@ import {
   ChevronLeft,
   ChevronRight,
   MapPin,
-   Map,
+  Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { tickets, ticketGroups } from '@/lib/mockData';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface SidebarLinkProps {
   to: string;
@@ -59,41 +59,77 @@ function SidebarLink({ to, icon, label, badge, collapsed }: SidebarLinkProps) {
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  
-  const openTicketsCount = tickets.filter(t => t.status !== 'Resolved' && t.status !== 'Closed').length;
-  const activeGroupsCount = ticketGroups.filter(g => g.status === 'Active').length;
+  const [openTicketsCount, setOpenTicketsCount] = useState(0);
+  const [activeGroupsCount, setActiveGroupsCount] = useState(0);
+
+  useEffect(() => {
+    fetchCounts();
+  }, []);
+
+  const fetchCounts = async () => {
+    try {
+      // Get open tickets count
+      const { count: ticketsCount } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .not('status', 'in', '(resolved,closed)');
+
+      // Get active groups count
+      const { count: groupsCount } = await supabase
+        .from('ticket_groups')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      setOpenTicketsCount(ticketsCount || 0);
+      setActiveGroupsCount(groupsCount || 0);
+    } catch (error) {
+      console.error('Error fetching counts:', error);
+    }
+  };
 
   return (
     <aside
       className={cn(
-        'h-[calc(100vh-64px)] border-r border-border bg-sidebar flex flex-col transition-all duration-300',
+        'h-[calc(100vh-64px)] sticky top-16 border-r border-border bg-sidebar flex flex-col transition-all duration-300',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
-      {/* Collapse Button */}
-      <div className={cn('p-2 flex', collapsed ? 'justify-center' : 'justify-end')}>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-8 h-8"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
-        </Button>
-      </div>
-
       {/* Navigation */}
-      <nav className="flex-1 px-3 pb-4 space-y-1 overflow-y-auto scrollbar-thin">
-        <SidebarLink
-          to="/dashboard"
-          icon={<LayoutDashboard className="w-5 h-5" />}
-          label="Dashboard"
-          collapsed={collapsed}
-        />
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
+        {/* Dashboard with toggle */}
+        <div className="flex items-center gap-1">
+          <SidebarLink
+            to="/dashboard"
+            icon={<LayoutDashboard className="w-5 h-5" />}
+            label="Dashboard"
+            collapsed={collapsed}
+          />
+          {!collapsed && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8 flex-shrink-0"
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+
+        {/* Collapsed toggle button */}
+        {collapsed && (
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8"
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         <SidebarLink
           to="/tickets"
           icon={<Inbox className="w-5 h-5" />}
@@ -165,7 +201,6 @@ export function Sidebar() {
           label="City Mapping"
           collapsed={collapsed}
         />
-
       </nav>
 
       {/* Bottom Section */}

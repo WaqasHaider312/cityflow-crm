@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Search, ChevronDown, Settings, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,23 +10,83 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { CommandPalette } from '@/components/common/CommandPalette';
-import { currentUser, notifications } from '@/lib/mockData';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { toast } from '@/hooks/use-toast';
 
 export function Header() {
   const [commandOpen, setCommandOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchUserData();
+    fetchNotifications();
+  }, []);
+
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      setCurrentUser(profile);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // TODO: Fetch real notifications when you create notifications table
+      setNotifications([]);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/login');
+      toast({ title: "Logged out successfully" });
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast({ title: "Error logging out", variant: "destructive" });
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
+  const userInitials = currentUser?.full_name
+    ?.split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'U';
 
   return (
     <>
       <header className="h-16 border-b border-border bg-surface flex items-center justify-between px-6 sticky top-0 z-40">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">CT</span>
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-sm">
+            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
           </div>
-          <span className="font-semibold text-lg text-foreground">CityTeam</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-lg text-foreground leading-none">CityTeam CRM</span>
+            <span className="text-xs text-muted-foreground">Ticket Management</span>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -50,12 +110,16 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 px-2 h-10">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-primary font-medium text-sm">{currentUser.avatar}</span>
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-primary/20">
+                  <span className="text-primary font-semibold text-sm">{userInitials}</span>
                 </div>
                 <div className="hidden md:flex flex-col items-start">
-                  <span className="text-sm font-medium text-foreground">{currentUser.name}</span>
-                  <span className="text-xs text-muted-foreground">{currentUser.role}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {currentUser?.full_name || 'Loading...'}
+                  </span>
+                  <span className="text-xs text-muted-foreground capitalize">
+                    {currentUser?.role || 'User'}
+                  </span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
               </Button>
@@ -70,7 +134,7 @@ export function Header() {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/login')} className="text-danger">
+              <DropdownMenuItem onClick={handleLogout} className="text-danger">
                 <LogOut className="w-4 h-4 mr-2" />
                 Log out
               </DropdownMenuItem>
