@@ -161,7 +161,7 @@ const fetchSlaRules = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, team_id, region_id, team:teams!fk_team(name), region:regions(name)')
+        .select('id, full_name, team_id, region_id, team:teams!fk_team(name), region:regions!region_id(name)')
         .eq('is_active', true)
         .order('full_name');
 
@@ -879,7 +879,7 @@ const fetchSlaRules = async () => {
                   <SelectValue placeholder="All issue types" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">All issue types</SelectItem>
+                  <SelectItem value="none">All issue types</SelectItem>
                   {issueTypes.map((type) => (
                     <SelectItem key={type.id} value={type.id}>{type.icon} {type.name}</SelectItem>
                   ))}
@@ -897,7 +897,7 @@ const fetchSlaRules = async () => {
                   <SelectValue placeholder="All regions" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">All regions</SelectItem>
+                  <SelectItem value="none">All regions</SelectItem>
                   {regions.map((region) => (
                     <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
                   ))}
@@ -1023,7 +1023,7 @@ const fetchSlaRules = async () => {
                   <SelectValue placeholder="All issue types" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="">All issue types</SelectItem>
+                  <SelectItem value="none">All issue types</SelectItem>
                   {issueTypes.map((type) => (
                     <SelectItem key={type.id} value={type.id}>{type.icon} {type.name}</SelectItem>
                   ))}
