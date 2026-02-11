@@ -743,7 +743,7 @@ const fetchSlaRules = async () => {
 
       {/* ========== ISSUE TYPE DIALOG ========== */}
       <Dialog open={issueTypeDialogOpen} onOpenChange={setIssueTypeDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingIssueType ? 'Edit' : 'Add'} Issue Type</DialogTitle>
             <DialogDescription>
