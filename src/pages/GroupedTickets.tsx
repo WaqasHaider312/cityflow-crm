@@ -19,14 +19,14 @@ export default function GroupedTickets() {
         setLoading(true);
 
         const { data, error } = await supabase
-          .from('ticket_groups')
-          .select(`
-            *,
-            issue_type:issue_types(name, icon),
-            assigned_user:profiles!assigned_to(full_name),
-            tickets:tickets(id)
-          `)
-          .order('created_at', { ascending: false });
+        .from('ticket_groups')
+        .select(`
+          *,
+          issue_type:issue_types!ticket_groups_issue_type_id_fkey(name, icon),
+          assigned_user:profiles!ticket_groups_assigned_to_fkey(full_name),
+          tickets(id)
+        `)
+        .order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -42,7 +42,7 @@ export default function GroupedTickets() {
     fetchGroups();
   }, []);
 
-  const activeGroups = ticketGroups.filter((g) => g.status === 'active');
+  const activeGroups = ticketGroups.filter((g) => g.status === 'active' || !g.status);
   const resolvedGroups = ticketGroups.filter((g) => g.status === 'resolved');
 
   if (loading) {
