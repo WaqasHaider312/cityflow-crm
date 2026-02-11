@@ -743,7 +743,7 @@ const fetchSlaRules = async () => {
 
       {/* ========== ISSUE TYPE DIALOG ========== */}
       <Dialog open={issueTypeDialogOpen} onOpenChange={setIssueTypeDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="max-w-lg max-h-[95vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingIssueType ? 'Edit' : 'Add'} Issue Type</DialogTitle>
             <DialogDescription>
@@ -855,7 +855,7 @@ const fetchSlaRules = async () => {
 
       {/* ========== ROUTING RULE DIALOG ========== */}
       <Dialog open={routingRuleDialogOpen} onOpenChange={setRoutingRuleDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingRoutingRule ? 'Edit' : 'Add'} Routing Rule</DialogTitle>
             <DialogDescription>
@@ -1008,7 +1008,7 @@ const fetchSlaRules = async () => {
 
       {/* ========== SLA RULE DIALOG ========== */}
       <Dialog open={slaRuleDialogOpen} onOpenChange={setSlaRuleDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[95vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingSlaRule ? 'Edit' : 'Add'} SLA Rule</DialogTitle>
             <DialogDescription>
