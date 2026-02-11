@@ -855,7 +855,7 @@ const fetchSlaRules = async () => {
 
       {/* ========== ROUTING RULE DIALOG ========== */}
       <Dialog open={routingRuleDialogOpen} onOpenChange={setRoutingRuleDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="max-w-lg max-h-[95vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingRoutingRule ? 'Edit' : 'Add'} Routing Rule</DialogTitle>
             <DialogDescription>
