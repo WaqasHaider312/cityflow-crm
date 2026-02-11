@@ -107,7 +107,8 @@ export default function AdminSettings() {
       .from('routing_rules')
       .select(`
         *,
-        issue_type:issue_types(name),
+        issue_type:issue_types!routing_rules_issue_type_id_fkey(name),
+        region:regions!routing_rules_region_id_fkey(name),
         assign_to_team:teams!routing_rules_assign_to_team_id_fkey(name),
         assign_to_user:profiles!routing_rules_assign_to_user_id_fkey(full_name),
         tier2_user:profiles!routing_rules_tier2_user_id_fkey(full_name)
@@ -116,31 +117,34 @@ export default function AdminSettings() {
       .order('priority_order');
 
     if (error) throw error;
+    console.log('Routing rules loaded:', data); // Debug log
     setRoutingRules(data || []);
   } catch (error) {
     console.error('Error fetching routing rules:', error);
     toast({ title: "Error loading routing rules", variant: "destructive" });
   }
+
 };
 
 const fetchSlaRules = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('sla_rules')
-      .select(`
-        *,
-        issue_type:issue_types(name),
-        tier2_team:teams!sla_rules_tier2_team_id_fkey(name)
-      `)
-      .order('priority');
+    try {
+      const { data, error } = await supabase
+        .from('sla_rules')
+        .select(`
+          *,
+          issue_type:issue_types!sla_rules_issue_type_id_fkey(name),
+          tier2_team:teams!sla_rules_tier2_team_id_fkey(name)
+        `)
+        .order('priority');
 
-    if (error) throw error;
-    setSlaRules(data || []);
-  } catch (error) {
-    console.error('Error fetching SLA rules:', error);
-    toast({ title: "Error loading SLA rules", variant: "destructive" });
-  }
-};
+      if (error) throw error;
+      console.log('SLA rules loaded:', data); // Debug log
+      setSlaRules(data || []);
+    } catch (error) {
+      console.error('Error fetching SLA rules:', error);
+      toast({ title: "Error loading SLA rules", variant: "destructive" });
+    }
+  };
 
   const fetchTeams = async () => {
     try {
