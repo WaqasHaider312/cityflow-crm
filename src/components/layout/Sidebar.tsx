@@ -76,60 +76,61 @@ export function Sidebar() {
 
       // Get active groups count
       const { count: groupsCount } = await supabase
-        .from('ticket_groups')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active');
+                .from('ticket_groups')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'active');
 
-      setOpenTicketsCount(ticketsCount || 0);
-      setActiveGroupsCount(groupsCount || 0);
-    } catch (error) {
-      console.error('Error fetching counts:', error);
-    }
-  };
+              setOpenTicketsCount(ticketsCount || 0);
+              setActiveGroupsCount(groupsCount || 0);
+            } catch (error) {
+              console.error('Error fetching counts:', error);
+            }
+          };
 
-  return (
-    <aside
-      className={cn(
-        'h-[calc(100vh-64px)] sticky top-16 border-r border-border bg-sidebar flex flex-col transition-all duration-300',
-        collapsed ? 'w-16' : 'w-60'
-      )}
-    >
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-        {/* Dashboard with toggle */}
-        <div className="flex items-center gap-1">
-          <SidebarLink
-            to="/dashboard"
-            icon={<LayoutDashboard className="w-5 h-5" />}
-            label="Dashboard"
-            collapsed={collapsed}
-          />
-          {!collapsed && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-8 h-8 flex-shrink-0"
-              onClick={() => setCollapsed(!collapsed)}
+          return (
+            <aside
+              className={cn(
+                'h-[calc(100vh-64px)] sticky top-16 border-r border-border bg-sidebar flex flex-col transition-all duration-300',
+                collapsed ? 'w-16' : 'w-60'
+              )}
             >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-
-        {/* Collapsed toggle button */}
-        {collapsed && (
-          <div className="flex justify-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-8 h-8"
-              onClick={() => setCollapsed(!collapsed)}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+              {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
+          {/* Dashboard with toggle */}
+          <div className="flex items-center justify-between gap-2">
+            <SidebarLink
+              to="/dashboard"
+              icon={<LayoutDashboard className="w-5 h-5" />}
+              label="Dashboard"
+              collapsed={collapsed}
+            />
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 flex-shrink-0 hover:bg-primary/10"
+                onClick={() => setCollapsed(!collapsed)}
+              >
+                <ChevronLeft className="w-4 h-4 text-primary" />
+              </Button>
+            )}
           </div>
-        )}
 
+          {/* Collapsed toggle button - above dashboard */}
+          {collapsed && (
+            <div className="flex justify-center -mt-1 mb-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 hover:bg-primary/10"
+                onClick={() => setCollapsed(!collapsed)}
+              >
+                <ChevronRight className="w-4 h-4 text-primary" />
+              </Button>
+            </div>
+          )}
+
+  
         <SidebarLink
           to="/tickets"
           icon={<Inbox className="w-5 h-5" />}

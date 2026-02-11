@@ -13,6 +13,7 @@ import { CommandPalette } from '@/components/common/CommandPalette';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const [commandOpen, setCommandOpen] = useState(false);
@@ -41,6 +42,14 @@ export function Header() {
       console.error('Error fetching user:', error);
     }
   };
+
+  const roleColors = {
+  'super_admin': 'bg-danger/15 text-danger',
+  'team_admin': 'bg-info/15 text-info',
+  'member': 'bg-muted text-muted-foreground',
+};
+
+const roleColor = roleColors[currentUser?.role] || 'bg-muted text-muted-foreground';
 
   const fetchNotifications = async () => {
     try {
@@ -117,8 +126,8 @@ export function Header() {
                   <span className="text-sm font-medium text-foreground">
                     {currentUser?.full_name || 'Loading...'}
                   </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {currentUser?.role || 'User'}
+                 <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", roleColor)}>
+                    {currentUser?.role?.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'User'}
                   </span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
