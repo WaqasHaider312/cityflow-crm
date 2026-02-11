@@ -21,7 +21,7 @@ export function GroupedIssueCard({ group }: GroupedIssueCardProps) {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     
     if (diffHours < 0) return `${Math.abs(diffHours)}h overdue`;
-    return `${diffHours}h remaining`;
+    return `${diffHours}h `;
   };
 
   const slaRemaining = calculateSLARemaining();
