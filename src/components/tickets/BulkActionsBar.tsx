@@ -1,4 +1,4 @@
-import { X, CheckCircle2, Users, ArrowUpRight, Layers } from 'lucide-react';
+import { X, CheckCircle2, Users, ArrowUpRight, Layers, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,7 @@ interface BulkActionsBarProps {
   onReassign: () => void;
   onEscalate: () => void;
   onGroup: () => void;
+  onRespond: () => void;
 }
 
 export function BulkActionsBar({
@@ -18,6 +19,7 @@ export function BulkActionsBar({
   onReassign,
   onEscalate,
   onGroup,
+  onRespond,
 }: BulkActionsBarProps) {
   if (selectedCount === 0) return null;
 
@@ -36,42 +38,27 @@ export function BulkActionsBar({
       <div className="h-4 w-px bg-background/20" />
 
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-background hover:text-background hover:bg-background/10"
-          onClick={onResolve}
-        >
+        <Button size="sm" variant="ghost" className="text-background hover:text-background hover:bg-background/10" onClick={onResolve}>
           <CheckCircle2 className="w-4 h-4 mr-1" />
           Resolve
         </Button>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-background hover:text-background hover:bg-background/10"
-          onClick={onReassign}
-        >
+        <Button size="sm" variant="ghost" className="text-background hover:text-background hover:bg-background/10" onClick={onReassign}>
           <Users className="w-4 h-4 mr-1" />
           Reassign
         </Button>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-background hover:text-background hover:bg-background/10"
-          onClick={onEscalate}
-        >
+        <Button size="sm" variant="ghost" className="text-background hover:text-background hover:bg-background/10" onClick={onEscalate}>
           <ArrowUpRight className="w-4 h-4 mr-1" />
           Escalate
         </Button>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-background hover:text-background hover:bg-background/10"
-          onClick={onGroup}
-        >
+        <Button size="sm" variant="ghost" className="text-background hover:text-background hover:bg-background/10" onClick={onRespond}>
+          <MessageSquare className="w-4 h-4 mr-1" />
+          Respond
+        </Button>
+
+        <Button size="sm" variant="ghost" className="text-background hover:text-background hover:bg-background/10" onClick={onGroup}>
           <Layers className="w-4 h-4 mr-1" />
           Add to Group
         </Button>
@@ -79,12 +66,7 @@ export function BulkActionsBar({
 
       <div className="h-4 w-px bg-background/20" />
 
-      <Button
-        size="icon"
-        variant="ghost"
-        className="w-8 h-8 text-background hover:text-background hover:bg-background/10"
-        onClick={onClear}
-      >
+      <Button size="icon" variant="ghost" className="w-8 h-8 text-background hover:text-background hover:bg-background/10" onClick={onClear}>
         <X className="w-4 h-4" />
       </Button>
     </div>
