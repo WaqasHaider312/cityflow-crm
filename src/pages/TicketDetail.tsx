@@ -295,7 +295,7 @@ export default function TicketDetail() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*, region:regions(id, name)')
+.select('*')
         .eq('id', user.id)
         .single();
       setCurrentUser(profile);
