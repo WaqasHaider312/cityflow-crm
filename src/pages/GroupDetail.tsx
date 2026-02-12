@@ -78,35 +78,32 @@ export default function GroupDetail() {
     if (id) fetchData();
   }, [id]);
 
-  // Calculate SLA status
   const calculateSLAStatus = () => {
-    if (!group?.sla_due_at) return 'on-track';
-    
-    const now = new Date();
-    const dueAt = new Date(group.sla_due_at);
-    const timeRemaining = dueAt.getTime() - now.getTime();
-    const hoursRemaining = timeRemaining / (1000 * 60 * 60);
+  if (!group?.sla_due_at) return 'on-track';
 
-    if (timeRemaining < 0) return 'breached';
-    if (hoursRemaining <= 2) return 'warning';
-    return 'on-track';
-  };
+  const now = new Date();
+  const dueAt = new Date(group.sla_due_at);
+  const timeRemaining = dueAt.getTime() - now.getTime();
+  const hoursRemaining = timeRemaining / (1000 * 60 * 60);
 
-  // Format SLA remaining time
-  const formatSLARemaining = () => {
-    if (!group?.sla_due_at) return '0h';
-    
-    const now = new Date();
-    const dueAt = new Date(group.sla_due_at);
-    const timeRemaining = dueAt.getTime() - now.getTime();
-    const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
-    const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+  if (timeRemaining < 0) return 'breached';
+  if (hoursRemaining <= 2) return 'warning';
+  return 'on-track';
+};
 
-    if (timeRemaining < 0) {
-      return `-${Math.abs(hoursRemaining)}h`;
-    }
-    return `${hoursRemaining}h ${minutesRemaining}m`;
-  };
+const formatSLARemaining = () => {
+  if (!group?.sla_due_at) return '0h 0m';
+
+  const now = new Date();
+  const dueAt = new Date(group.sla_due_at);
+  const timeRemaining = dueAt.getTime() - now.getTime();
+  const abs = Math.abs(timeRemaining);
+  const hours = Math.floor(abs / (1000 * 60 * 60));
+  const minutes = Math.floor((abs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (timeRemaining < 0) return `-${hours}h ${minutes}m`;
+  return `${hours}h ${minutes}m`;
+};
 
   const handleSelectAll = () => {
     if (selectedIds.length === groupTickets.length) {
