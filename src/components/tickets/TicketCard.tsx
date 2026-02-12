@@ -3,8 +3,20 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
 import { SLATimer } from '@/components/common/SLATimer';
-import type { Ticket } from '@/lib/mockData';
 import { cn } from '@/lib/utils';
+
+interface Ticket {
+  id: string;
+  ticket_number?: string;
+  subject: string;
+  status: 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'critical';
+  issue_type?: { name: string; icon: string };
+  assigned_user?: { full_name: string };
+  supplier_city?: string;
+  sla_due_at?: string;
+  sla_status?: string;
+}
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -36,7 +48,9 @@ export function TicketCard({ ticket, selected, onSelect, showCheckbox = false }:
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-muted-foreground">#{ticket.id}</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              #{ticket.ticket_number || ticket.id.slice(0, 8)}
+            </span>
             <StatusBadge status={ticket.status} />
             <PriorityBadge priority={ticket.priority} />
           </div>
@@ -45,17 +59,17 @@ export function TicketCard({ ticket, selected, onSelect, showCheckbox = false }:
 
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-4 text-muted-foreground">
-              <span>{ticket.issueType}</span>
+              <span>{ticket.issue_type?.icon} {ticket.issue_type?.name}</span>
               <span>•</span>
-              <span>{ticket.city}</span>
+              <span>{ticket.supplier_city || '-'}</span>
               <span>•</span>
-              <span>{ticket.assignedTo}</span>
+              <span>{ticket.assigned_user?.full_name || 'Unassigned'}</span>
             </div>
-            
-            {ticket.status !== 'Resolved' && ticket.status !== 'Closed' && (
+
+            {ticket.status !== 'resolved' && ticket.status !== 'closed' && ticket.sla_due_at && (
               <SLATimer
-                remaining={ticket.slaRemaining}
-                status={ticket.slaStatus}
+                remaining={ticket.sla_due_at}
+                status={(ticket.sla_status as 'on-track' | 'warning' | 'breached') || 'on-track'}
                 className="text-xs"
               />
             )}

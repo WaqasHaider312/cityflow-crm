@@ -49,9 +49,14 @@ export default function Dashboard() {
         `)
         .order('created_at', { ascending: false });
 
-      // Filter by region if user is city manager and not in "all" mode
-      if (profile?.region_id && viewMode === 'my-region') {
-        ticketsQuery = ticketsQuery.eq('region_id', profile.region_id);
+      // Filter tickets based on role
+      if (!profile?.is_super_admin) {
+        if (profile?.region_id && viewMode === 'my-region') {
+          ticketsQuery = ticketsQuery.eq('region_id', profile.region_id);
+        } else if (!profile?.region_id) {
+          // Member with no region — only show tickets assigned to them
+          ticketsQuery = ticketsQuery.eq('assigned_to', user.id);
+        }
       }
 
       const { data: ticketsData, error: ticketsError } = await ticketsQuery;
