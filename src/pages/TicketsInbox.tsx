@@ -39,6 +39,7 @@ const priorityMap: Record<string, string> = {
   'All': 'All', 'Low': 'low', 'Normal': 'normal', 'High': 'high', 'Critical': 'critical'
 };
 
+
 export default function TicketsInbox() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,8 @@ export default function TicketsInbox() {
   const [teams, setTeams] = useState([]);
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [issueTypesList, setIssueTypesList] = useState([]);
+
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<Status>('All');
@@ -73,6 +76,7 @@ export default function TicketsInbox() {
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [addingToGroup, setAddingToGroup] = useState(false);
+  
 
   useEffect(() => { fetchCurrentUser(); }, []);
 
@@ -104,14 +108,22 @@ export default function TicketsInbox() {
         .eq('is_active', true)
         .order('name');
 
+
+
       const { data: usersData } = await supabase
         .from('profiles')
         .select('id, full_name, team:teams!fk_team(name)')
         .eq('is_active', true)
         .order('full_name');
 
-      setTeams(teamsData || []);
-      setUsers(usersData || []);
+      const { data: issueTypesData } = await supabase
+  .from('issue_types')
+  .select('id, name, icon')
+  .order('name');
+
+setTeams(teamsData || []);
+setUsers(usersData || []);
+setIssueTypesList(issueTypesData || []);
     } catch (error) {
       console.error('Error fetching teams/users:', error);
     }
@@ -365,10 +377,11 @@ export default function TicketsInbox() {
           />
         </div>
         <TicketFilters
-          status={status} priority={priority} team={team} city={city} issueType={issueType}
-          onStatusChange={setStatus} onPriorityChange={setPriority} onTeamChange={setTeam}
-          onCityChange={setCity} onIssueTypeChange={setIssueType} onClearAll={clearFilters}
-        />
+  status={status} priority={priority} team={team} city={city} issueType={issueType}
+  onStatusChange={setStatus} onPriorityChange={setPriority} onTeamChange={setTeam}
+  onCityChange={setCity} onIssueTypeChange={setIssueType} onClearAll={clearFilters}
+  teams={teams} issueTypes={issueTypesList}
+/>
       </div>
 
       {filteredTickets.length === 0 ? (

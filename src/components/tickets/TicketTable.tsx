@@ -11,8 +11,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { Ticket } from '@/lib/mockData';
 import { cn } from '@/lib/utils';
+
+interface Ticket {
+  id: string;
+  ticket_number?: string;
+  subject: string;
+  status: 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'critical';
+  assigned_user?: { full_name: string };
+  sla_due_at?: string;
+  sla_status?: string;
+  created_at: string;
+}
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -42,6 +53,13 @@ export function TicketTable({ tickets, selectedIds, onSelectChange }: TicketTabl
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short', year: 'numeric'
+    });
+  };
+
   return (
     <div className="bg-card rounded-lg border border-border overflow-hidden">
       <Table>
@@ -51,9 +69,7 @@ export function TicketTable({ tickets, selectedIds, onSelectChange }: TicketTabl
               <Checkbox
                 checked={allSelected}
                 ref={(el) => {
-                  if (el) {
-                    (el as any).indeterminate = someSelected;
-                  }
+                  if (el) (el as any).indeterminate = someSelected;
                 }}
                 onCheckedChange={handleSelectAll}
               />
@@ -83,7 +99,9 @@ export function TicketTable({ tickets, selectedIds, onSelectChange }: TicketTabl
                   onCheckedChange={(checked) => handleSelectOne(ticket.id, checked as boolean)}
                 />
               </TableCell>
-              <TableCell className="font-medium text-muted-foreground">#{ticket.id}</TableCell>
+              <TableCell className="font-medium text-muted-foreground">
+                #{ticket.ticket_number || ticket.id.slice(0, 8)}
+              </TableCell>
               <TableCell>
                 <div className="max-w-xs truncate">{ticket.subject}</div>
               </TableCell>
@@ -93,19 +111,23 @@ export function TicketTable({ tickets, selectedIds, onSelectChange }: TicketTabl
               <TableCell>
                 <PriorityBadge priority={ticket.priority} />
               </TableCell>
-              <TableCell className="text-sm">{ticket.assignedTo}</TableCell>
+              <TableCell className="text-sm">
+                {ticket.assigned_user?.full_name || <span className="text-muted-foreground">Unassigned</span>}
+              </TableCell>
               <TableCell>
-                {ticket.status !== 'Resolved' && ticket.status !== 'Closed' ? (
+                {ticket.status !== 'resolved' && ticket.status !== 'closed' ? (
                   <SLATimer
-                    remaining={ticket.slaRemaining}
-                    status={ticket.slaStatus}
+                    remaining={ticket.sla_due_at}
+                    status={(ticket.sla_status as 'on-track' | 'warning' | 'breached') || 'on-track'}
                     className="text-xs"
                   />
                 ) : (
                   <span className="text-xs text-muted-foreground">Completed</span>
                 )}
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">{ticket.createdAt}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {formatDate(ticket.created_at)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { issueTypes, teams, cities } from '@/lib/mockData';
 
 type Status = 'All' | 'New' | 'Assigned' | 'In Progress' | 'Pending' | 'Resolved' | 'Closed';
 type Priority = 'All' | 'Low' | 'Normal' | 'High' | 'Critical';
@@ -24,6 +23,8 @@ interface TicketFiltersProps {
   onCityChange: (city: string) => void;
   onIssueTypeChange: (type: string) => void;
   onClearAll: () => void;
+  teams: { id: string; name: string }[];
+  issueTypes: { id: string; name: string; icon: string }[];
 }
 
 export function TicketFilters({
@@ -38,8 +39,11 @@ export function TicketFilters({
   onCityChange,
   onIssueTypeChange,
   onClearAll,
+  teams,
+  issueTypes,
 }: TicketFiltersProps) {
-  const hasFilters = status !== 'All' || priority !== 'All' || team !== 'All' || city !== 'All' || issueType !== 'All';
+  const hasFilters =
+    status !== 'All' || priority !== 'All' || team !== 'All' || city !== 'All' || issueType !== 'All';
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -89,9 +93,6 @@ export function TicketFilters({
         </SelectTrigger>
         <SelectContent className="bg-popover">
           <SelectItem value="All">All Cities</SelectItem>
-          {cities.map((c) => (
-            <SelectItem key={c} value={c}>{c}</SelectItem>
-          ))}
         </SelectContent>
       </Select>
 
