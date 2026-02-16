@@ -317,7 +317,7 @@ export default function TicketDetail() {
 
       const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
-        .select('*, user:profiles(full_name)')
+        .select('*, comment_source, user:profiles(full_name)')
         .eq('ticket_id', id)
         .order('created_at', { ascending: true });
       if (commentsError) throw commentsError;
@@ -750,9 +750,13 @@ export default function TicketDetail() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                            {comment.user.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </div>
-                          <span className="font-medium text-sm text-foreground">{comment.user.full_name}</span>
+                          {comment.comment_source === 'supplier'
+                            ? 'S'
+                            : comment.user?.full_name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() ?? '?'}
+                        </div>
+                        <span className="font-medium text-sm text-foreground">
+                          {comment.comment_source === 'supplier' ? ticket.supplier_name : comment.user?.full_name ?? 'Agent'}
+                        </span>
                           {comment.is_internal && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning">Internal</span>
                           )}
