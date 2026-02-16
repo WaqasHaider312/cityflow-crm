@@ -162,7 +162,7 @@ export function Sidebar() {
         <div className="my-4 border-t border-border" />
 
         <SidebarLink
-          to="/communications"
+          to="/broadcasts"
           icon={<Megaphone className="w-5 h-5" />}
           label="Broadcasts"
           collapsed={collapsed}
