@@ -19,6 +19,9 @@ import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/NotFound";
 import RegionsManagement from '@/pages/RegionsManagement';
 import CityMapping from '@/pages/CityMapping';
+import Broadcasts from "@/pages/Broadcasts";
+import FAQs from "@/pages/FAQs";
+
 
 
 const queryClient = new QueryClient();
@@ -51,6 +54,10 @@ const App = () => (
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/regions" element={<RegionsManagement />} />
             <Route path="/cities" element={<CityMapping />} />
+            <Route path="/broadcasts" element={<Broadcasts />} />
+            <Route path="/faqs" element={<FAQs />} />
+
+
 
           </Route>
 
