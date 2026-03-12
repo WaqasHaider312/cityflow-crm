@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
 import TicketsInbox from "@/pages/TicketsInbox";
 import GroupedTickets from "@/pages/GroupedTickets";
 import GroupDetail from "@/pages/GroupDetail";
@@ -33,12 +32,12 @@ const App = () => (
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
 
-          {/* Redirect root to dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Redirect root to Tickets */}
+          <Route path="/" element={<Navigate to="/tickets" replace />} />
 
           {/* App Routes with Layout */}
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/tickets" element={<TicketsInbox />} />
 
             {/* Tickets — split view, detail lives inside TicketsInbox */}
             <Route path="/tickets" element={<TicketsInbox />} />

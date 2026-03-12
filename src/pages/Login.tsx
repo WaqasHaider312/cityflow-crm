@@ -40,7 +40,7 @@ export default function Login() {
           : "You've successfully logged in.",
       });
 
-      navigate('/dashboard');
+      navigate('/tickets');
     } catch (error) {
       console.error('Login error:', error);
       toast({
