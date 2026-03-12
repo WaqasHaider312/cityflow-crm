@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import TicketDetail from './TicketDetail';
+import { useOutletContext } from 'react-router-dom';
+const { activeView, setActiveView } = useOutletContext<any>();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -507,7 +509,7 @@ export default function TicketsInbox() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
 
       {/* ── Panel 1: Views Sidebar ─────────────────────────────────────────── */}
       <div className="w-56 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
