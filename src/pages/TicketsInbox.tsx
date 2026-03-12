@@ -39,7 +39,6 @@ import {
 import { Label } from '@/components/ui/label';
 import TicketDetail from './TicketDetail';
 import { useOutletContext } from 'react-router-dom';
-const { activeView, setActiveView } = useOutletContext<any>();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +74,7 @@ const statusMap: Record<string, string> = {
   'All': 'All', 'New': 'new', 'In Progress': 'in_progress',
   'Pending': 'pending', 'Resolved': 'resolved', 'Closed': 'closed'
 };
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -220,6 +220,10 @@ function EmptyDetail() {
 
 export default function TicketsInbox() {
   const navigate = useNavigate();
+  const [selectedView, setSelectedView] = useState('my_open');
+  const context = useOutletContext<any>();
+  const activeView = context?.activeView;
+  const setActiveView = context?.setActiveView;
 
   // ── Data state ──────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -277,7 +281,9 @@ export default function TicketsInbox() {
   }, [currentUser, currentView, statusFilter, topicFilter]);
 
   useEffect(() => { setDisplayCount(20); setAutoLoadCount(0); }, [currentView, topicFilter, statusFilter, search, sortBy]);
-
+useEffect(() => {
+    if (activeView) setSelectedView(activeView);
+  }, [activeView]);
   // ── Scroll auto-load ──────────────────────────────────────────────────────────
   useEffect(() => {
     const el = scrollRef.current;
