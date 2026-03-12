@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { supabase } from '@/lib/supabase';
 
 export function AppLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
+
+  // Tickets page needs full height, no padding
+  const isTicketsPage = location.pathname === '/tickets';
 
   useEffect(() => {
     const checkSession = async () => {
@@ -37,14 +41,22 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <div className="flex">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
-          <div className="p-6 animate-fade-in">
-            <Outlet />
-          </div>
+        <main className={`flex-1 overflow-hidden ${isTicketsPage ? '' : 'overflow-auto'}`}>
+          {isTicketsPage ? (
+            // Full height, no padding for tickets split view
+            <div className="h-full animate-fade-in">
+              <Outlet />
+            </div>
+          ) : (
+            // Normal padded layout for all other pages
+            <div className="p-6 overflow-auto h-full animate-fade-in">
+              <Outlet />
+            </div>
+          )}
         </main>
       </div>
     </div>

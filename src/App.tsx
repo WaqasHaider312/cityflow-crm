@@ -9,7 +9,6 @@ import Dashboard from "@/pages/Dashboard";
 import TicketsInbox from "@/pages/TicketsInbox";
 import GroupedTickets from "@/pages/GroupedTickets";
 import GroupDetail from "@/pages/GroupDetail";
-import TicketDetail from "@/pages/TicketDetail";
 import CreateTicket from "@/pages/CreateTicket";
 import Teams from "@/pages/Teams";
 import TeamDetail from "./pages/TeamDetail";
@@ -22,8 +21,6 @@ import CityMapping from '@/pages/CityMapping';
 import Broadcasts from "@/pages/Broadcasts";
 import FAQs from "@/pages/FAQs";
 
-
-
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -35,18 +32,18 @@ const App = () => (
         <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
-          
+
           {/* Redirect root to dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          
+
           {/* App Routes with Layout */}
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+
+            {/* Tickets — split view, detail lives inside TicketsInbox */}
             <Route path="/tickets" element={<TicketsInbox />} />
             <Route path="/tickets/grouped" element={<GroupedTickets />} />
             <Route path="/tickets/group/:id" element={<GroupDetail />} />
-            <Route path="/tickets/create" element={<CreateTicket />} />
-            <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/teams" element={<Teams />} />
             <Route path="/teams/:id" element={<TeamDetail />} />
             <Route path="/reports" element={<Reports />} />
@@ -56,9 +53,6 @@ const App = () => (
             <Route path="/cities" element={<CityMapping />} />
             <Route path="/broadcasts" element={<Broadcasts />} />
             <Route path="/faqs" element={<FAQs />} />
-
-
-
           </Route>
 
           {/* Catch-all */}

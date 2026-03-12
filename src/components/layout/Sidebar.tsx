@@ -1,33 +1,21 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Inbox,
-  Layers,
-  Users,
-  BarChart3,
-  Megaphone,
-  HelpCircle,
-  Settings,
-  Shield,
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  Map,
+  LayoutDashboard, Inbox, Layers, Users, BarChart3,
+  Megaphone, HelpCircle, Settings, Shield, ChevronLeft,
+  ChevronRight, MapPin, Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState } from 'react';
 
 interface SidebarLinkProps {
   to: string;
   icon: React.ReactNode;
   label: string;
-  badge?: number;
   collapsed?: boolean;
 }
 
-function SidebarLink({ to, icon, label, badge, collapsed }: SidebarLinkProps) {
+function SidebarLink({ to, icon, label, collapsed }: SidebarLinkProps) {
   const location = useLocation();
   const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
 
@@ -36,175 +24,62 @@ function SidebarLink({ to, icon, label, badge, collapsed }: SidebarLinkProps) {
       to={to}
       className={cn(
         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-        isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary',
+        isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary',
         collapsed && 'justify-center px-2'
       )}
     >
       <span className="flex-shrink-0">{icon}</span>
-      {!collapsed && (
-        <>
-          <span className="flex-1">{label}</span>
-          {badge !== undefined && badge > 0 && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary">
-              {badge}
-            </span>
-          )}
-        </>
-      )}
+      {!collapsed && <span className="flex-1">{label}</span>}
     </NavLink>
   );
 }
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [openTicketsCount, setOpenTicketsCount] = useState(0);
-  const [activeGroupsCount, setActiveGroupsCount] = useState(0);
 
-  useEffect(() => {
-    fetchCounts();
-  }, []);
+  return (
+    <aside className={cn(
+      'h-[calc(100vh-64px)] sticky top-16 border-r border-border bg-sidebar flex flex-col transition-all duration-300',
+      collapsed ? 'w-16' : 'w-60'
+    )}>
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
 
-  const fetchCounts = async () => {
-    try {
-      // Get open tickets count
-      const { count: ticketsCount } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .not('status', 'in', '(resolved,closed)');
-
-      // Get active groups count
-      const { count: groupsCount } = await supabase
-                .from('ticket_groups')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'active');
-
-              setOpenTicketsCount(ticketsCount || 0);
-              setActiveGroupsCount(groupsCount || 0);
-            } catch (error) {
-              console.error('Error fetching counts:', error);
-            }
-          };
-
-          return (
-            <aside
-              className={cn(
-                'h-[calc(100vh-64px)] sticky top-16 border-r border-border bg-sidebar flex flex-col transition-all duration-300',
-                collapsed ? 'w-16' : 'w-60'
-              )}
-            >
-              {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-          {/* Dashboard with toggle */}
-          <div className="flex items-center justify-between gap-2">
-            <SidebarLink
-              to="/dashboard"
-              icon={<LayoutDashboard className="w-5 h-5" />}
-              label="Dashboard"
-              collapsed={collapsed}
-            />
-            {!collapsed && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-8 h-8 flex-shrink-0 hover:bg-primary/10"
-                onClick={() => setCollapsed(!collapsed)}
-              >
-                <ChevronLeft className="w-4 h-4 text-primary" />
-              </Button>
-            )}
-          </div>
-
-          {/* Collapsed toggle button - above dashboard */}
-          {collapsed && (
-            <div className="flex justify-center -mt-1 mb-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-8 h-8 hover:bg-primary/10"
-                onClick={() => setCollapsed(!collapsed)}
-              >
-                <ChevronRight className="w-4 h-4 text-primary" />
-              </Button>
-            </div>
+        {/* Dashboard + collapse toggle */}
+        <div className="flex items-center justify-between gap-2">
+          <SidebarLink to="/dashboard" icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" collapsed={collapsed} />
+          {!collapsed && (
+            <Button variant="ghost" size="icon" className="w-8 h-8 flex-shrink-0 hover:bg-primary/10" onClick={() => setCollapsed(true)}>
+              <ChevronLeft className="w-4 h-4 text-primary" />
+            </Button>
           )}
+        </div>
 
-  
-        <SidebarLink
-          to="/tickets"
-          icon={<Inbox className="w-5 h-5" />}
-          label="My Tickets"
-          badge={openTicketsCount}
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/tickets/grouped"
-          icon={<Layers className="w-5 h-5" />}
-          label="Grouped Issues"
-          badge={activeGroupsCount}
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/teams"
-          icon={<Users className="w-5 h-5" />}
-          label="Teams"
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/reports"
-          icon={<BarChart3 className="w-5 h-5" />}
-          label="Reports"
-          collapsed={collapsed}
-        />
+        {collapsed && (
+          <div className="flex justify-center -mt-1 mb-2">
+            <Button variant="ghost" size="icon" className="w-8 h-8 hover:bg-primary/10" onClick={() => setCollapsed(false)}>
+              <ChevronRight className="w-4 h-4 text-primary" />
+            </Button>
+          </div>
+        )}
 
-        {/* Divider */}
+        <SidebarLink to="/tickets" icon={<Inbox className="w-5 h-5" />} label="Tickets" collapsed={collapsed} />
+        <SidebarLink to="/tickets/grouped" icon={<Layers className="w-5 h-5" />} label="Grouped Issues" collapsed={collapsed} />
+        <SidebarLink to="/teams" icon={<Users className="w-5 h-5" />} label="Teams" collapsed={collapsed} />
+        <SidebarLink to="/reports" icon={<BarChart3 className="w-5 h-5" />} label="Reports" collapsed={collapsed} />
+
         <div className="my-4 border-t border-border" />
 
-        <SidebarLink
-          to="/broadcasts"
-          icon={<Megaphone className="w-5 h-5" />}
-          label="Broadcasts"
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/faqs"
-          icon={<HelpCircle className="w-5 h-5" />}
-          label="FAQs"
-          collapsed={collapsed}
-        />
+        <SidebarLink to="/broadcasts" icon={<Megaphone className="w-5 h-5" />} label="Broadcasts" collapsed={collapsed} />
+        <SidebarLink to="/faqs" icon={<HelpCircle className="w-5 h-5" />} label="FAQs" collapsed={collapsed} />
 
-        {/* Admin Section */}
         <div className="my-4 border-t border-border" />
 
-        <SidebarLink
-          to="/admin/settings"
-          icon={<Settings className="w-5 h-5" />}
-          label="Settings"
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/admin/users"
-          icon={<Shield className="w-5 h-5" />}
-          label="User Management"
-          collapsed={collapsed}
-        />
-
-        <SidebarLink
-          to="/regions"
-          icon={<MapPin className="w-5 h-5" />}
-          label="Regions"
-          collapsed={collapsed}
-        />
-        <SidebarLink
-          to="/cities"
-          icon={<Map className="w-5 h-5" />}
-          label="City Mapping"
-          collapsed={collapsed}
-        />
+        <SidebarLink to="/admin/settings" icon={<Settings className="w-5 h-5" />} label="Settings" collapsed={collapsed} />
+        <SidebarLink to="/admin/users" icon={<Shield className="w-5 h-5" />} label="User Management" collapsed={collapsed} />
+        <SidebarLink to="/regions" icon={<MapPin className="w-5 h-5" />} label="Regions" collapsed={collapsed} />
+        <SidebarLink to="/cities" icon={<Map className="w-5 h-5" />} label="City Mapping" collapsed={collapsed} />
       </nav>
 
-      {/* Bottom Section */}
       {!collapsed && (
         <div className="p-4 border-t border-border">
           <div className="text-xs text-muted-foreground">
