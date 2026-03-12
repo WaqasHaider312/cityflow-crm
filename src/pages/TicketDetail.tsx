@@ -242,6 +242,7 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
   const [escalationNote, setEscalationNote] = useState('');
+  const [watchers, setWatchers] = useState<any[]>([]);
 
   useEffect(() => {
     if (ticketId) { fetchTicketData(); }
@@ -307,6 +308,13 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
       setTicketAttachments(ticketAttachmentsData || []);
       setCommentAttachments(commentAttachmentsMap);
 
+      const { data: watchersData } = await supabase
+  .from('ticket_watchers')
+  .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
+  .eq('ticket_id', ticketId);
+setWatchers((watchersData || []).map(w => w.user));
+
+
       // Fetch supplier stats
       if (ticketData?.supplier_id) {
         fetchSupplierStats(ticketData.supplier_id);
@@ -318,6 +326,12 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
       setLoading(false);
     }
   };
+
+  const handleEscalateToWatcher = async (watcherId: string) => {
+  await supabase.from('tickets').update({ assigned_to: watcherId }).eq('id', ticketId);
+  toast({ title: 'Ticket assigned to watcher' });
+  fetchTicketData(); onRefresh?.();
+};
 
   const fetchSupplierStats = async (supplierId: string) => {
     try {
@@ -536,21 +550,6 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-background flex-shrink-0">
-          <Button size="sm" onClick={handleResolve} disabled={ticket.status === 'resolved' || ticket.status === 'closed'}>
-            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Resolve
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEscalateDialogOpen(true)} disabled={ticket.is_escalated}>
-            <ArrowUpRight className="w-4 h-4 mr-1.5" /> Escalate
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setReassignDialogOpen(true)}>
-            <Users className="w-4 h-4 mr-1.5" /> Reassign
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleClose} disabled={ticket.status === 'closed'}>
-            <X className="w-4 h-4 mr-1.5" /> Close
-          </Button>
-        </div>
 
         {/* SLA breach warning */}
         {isManager && !ticket.manager_intervened && ticket.sla_status === 'breached' && (
@@ -701,39 +700,32 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
               </button>
             </div>
 
-            <div className="p-4 space-y-2">
-              <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
-
-              <Textarea
-                placeholder={isInternal ? 'Add internal note (only visible to team)...' : 'Type message, paste screenshot (Ctrl+V), or drag & drop files...'}
-                value={newComment}
-                onChange={e => setNewComment(e.target.value)}
-                onPaste={handlePaste}
-                rows={2}
-                maxLength={1000}
-                className={cn('resize-none', isInternal && 'bg-warning/5 border-warning/30')}
-              />
-
-              <FileUploadPreview files={uploadFiles} onRemove={i => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))} />
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="text-muted-foreground h-8">
-                    <Paperclip className="w-4 h-4 mr-1.5" /> Attach
-                  </Button>
-                  <span className="text-xs text-muted-foreground">{newComment.length}/1000</span>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handleAddComment}
-                  disabled={(!newComment.trim() && uploadFiles.length === 0) || submitting}
-                  className={isInternal ? 'bg-warning hover:bg-warning/90' : ''}
-                >
-                  {submitting ? 'Sending...' : isInternal ? 'Add Note' : 'Send Reply'}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">Paste screenshots • Drag & drop files</p>
-            </div>
+            <div className="p-3 space-y-2">
+  <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
+  <FileUploadPreview files={uploadFiles} onRemove={i => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))} />
+  <div className="flex items-center gap-2">
+    <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="text-muted-foreground h-8 w-8 flex-shrink-0">
+      <Paperclip className="w-4 h-4" />
+    </Button>
+    <Textarea
+      placeholder={isInternal ? 'Internal note...' : 'Type message or paste screenshot...'}
+      value={newComment}
+      onChange={e => setNewComment(e.target.value)}
+      onPaste={handlePaste}
+      rows={1}
+      maxLength={1000}
+      className={cn('resize-none flex-1', isInternal && 'bg-warning/5 border-warning/30')}
+    />
+    <Button
+      size="sm"
+      onClick={handleAddComment}
+      disabled={(!newComment.trim() && uploadFiles.length === 0) || submitting}
+      className={cn('flex-shrink-0', isInternal ? 'bg-warning hover:bg-warning/90' : '')}
+    >
+      {submitting ? '...' : isInternal ? 'Note' : 'Send'}
+    </Button>
+  </div>
+</div>
           </div>
         )}
       </div>
@@ -784,17 +776,7 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
               </div>
             )}
 
-            {ticket.supplier_id && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Supplier ID</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-foreground">{ticket.supplier_id}</span>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(ticket.supplier_id!)}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            
 
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div>
@@ -811,9 +793,9 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
                 <p className="text-xs text-foreground">{format(new Date(ticket.created_at), 'MMM dd, HH:mm')}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Issue Type</p>
-                <p className="text-xs text-foreground">{ticket.issue_type?.icon} {ticket.issue_type?.name}</p>
-              </div>
+  <p className="text-xs text-muted-foreground mb-0.5">City</p>
+  <p className="text-xs text-foreground">{ticket.city || ticket.city || '—'}</p>
+</div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Priority</p>
                 <PriorityBadge priority={ticket.priority as any} />
@@ -869,23 +851,47 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
         </div>
 
         {/* Assignment Info */}
+        
         <div className="p-4 border-b border-border">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assignment</p>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                {getInitials(ticket.assigned_user?.full_name)}
+  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assignment</p>
+  <div className="space-y-2 text-sm">
+    <div className="flex items-center gap-2">
+      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+        {getInitials(ticket.assigned_user?.full_name)}
+      </div>
+      <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
+    </div>
+    {ticket.team?.name && <p className="text-xs text-muted-foreground">Team: {ticket.team.name}</p>}
+    {ticket.region?.name && (
+      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+        {ticket.region.name}
+      </Badge>
+    )}
+    {watchers.length > 0 && (
+      <div className="pt-2 border-t border-border">
+        <p className="text-xs text-muted-foreground mb-1.5">Watchers</p>
+        <div className="space-y-1.5">
+          {watchers.map(w => (
+            <div key={w.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
+                  {getInitials(w.full_name)}
+                </div>
+                <span className="text-xs text-foreground">{w.full_name}</span>
               </div>
-              <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
+              <button
+                onClick={() => handleEscalateToWatcher(w.id)}
+                className="text-xs text-primary hover:underline"
+              >
+                Escalate
+              </button>
             </div>
-            {ticket.team?.name && <p className="text-xs text-muted-foreground">Team: {ticket.team.name}</p>}
-            {ticket.region?.name && (
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-                {ticket.region.name}
-              </Badge>
-            )}
-          </div>
+          ))}
         </div>
+      </div>
+    )}
+  </div>
+</div>
 
         {/* Supplier Ticket History */}
         <div className="p-4">

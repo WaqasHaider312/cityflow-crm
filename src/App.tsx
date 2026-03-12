@@ -8,7 +8,6 @@ import Login from "@/pages/Login";
 import TicketsInbox from "@/pages/TicketsInbox";
 import GroupedTickets from "@/pages/GroupedTickets";
 import GroupDetail from "@/pages/GroupDetail";
-import CreateTicket from "@/pages/CreateTicket";
 import Teams from "@/pages/Teams";
 import TeamDetail from "./pages/TeamDetail";
 import Reports from "@/pages/Reports";

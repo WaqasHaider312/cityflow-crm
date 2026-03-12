@@ -162,9 +162,9 @@ function TicketCard({
         </div>
 
         {/* Row 3: latest message preview */}
-        <p className="text-xs text-muted-foreground mb-1.5 line-clamp-2 leading-relaxed">
-          {ticket.latest_comment_preview || ticket.description || ticket.subject}
-        </p>
+        <p className="text-xs text-muted-foreground mb-1.5 leading-relaxed">
+  {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 60)}
+</p>
 
         {/* Row 4: meta + SLA + time */}
         <div className="flex items-center justify-between">
@@ -174,28 +174,13 @@ function TicketCard({
                 {ticket.issue_type.icon} {ticket.issue_type.name}
               </span>
             )}
-            {ticket.city && (
-              <span className="text-xs text-muted-foreground">• {ticket.city}</span>
-            )}
-            {ticket.supplier_phone && (
-              <span className="text-xs text-muted-foreground">• {ticket.supplier_phone}</span>
-            )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {ticket.status !== 'resolved' && ticket.status !== 'closed' && ticket.sla_due_at && (
-              <SLATimer
-                remaining={ticket.sla_due_at}
-                status={(ticket.sla_status as any) || 'on-track'}
-                className="text-xs"
-              />
-            )}
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(
-                new Date(ticket.last_supplier_message_at || ticket.created_at),
-                { addSuffix: true }
-              )}
-            </span>
-          </div>
+          <span className="text-xs text-muted-foreground">
+  {formatDistanceToNow(
+    new Date(ticket.last_supplier_message_at || ticket.created_at),
+    { addSuffix: true }
+  )}
+</span>
         </div>
       </div>
     </div>
