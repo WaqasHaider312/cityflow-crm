@@ -273,6 +273,8 @@ export default function TicketsInbox() {
   const [addingToGroup, setAddingToGroup] = useState(false);
 
   // ── Init ─────────────────────────────────────────────────────────────────────
+  useEffect(() => { fetchCurrentUser(); }, []);
+
   useEffect(() => {
   if (!currentUser) return;
   const channel = supabase
@@ -374,7 +376,9 @@ useEffect(() => {
   resolved: all.filter(t => t.status === 'resolved' && new Date(t.resolved_at) >= today).length,
   all_resolved: all.filter(t => t.status === 'resolved').length,
   all: all.length,
-});
+}
+
+);
     } catch (error) {
       console.error('Error fetching tickets:', error);
       toast({ title: 'Error loading tickets', variant: 'destructive' });
