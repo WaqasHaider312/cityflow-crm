@@ -533,8 +533,7 @@ useEffect(() => {
 
   const isAssigned = currentUser?.id === ticket.assigned_to;
   const isManager = currentUser?.region_id === ticket.region_id;
-  const canReply = isAssigned || isManager || currentUser?.role === 'super_admin';
-
+const canReply = !currentUser || isAssigned || isManager || currentUser?.role === 'super_admin';
   return (
     <div className="flex h-full overflow-hidden">
       {/* Media Viewer */}
