@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  CheckCircle2, ArrowUpRight, Users, X, Eye, Send, AlertCircle,
-  Paperclip, Download, FileText, Image, Film, File, Copy, ChevronDown, ChevronUp
+  ArrowUpRight, X, Eye, Send, AlertCircle,
+  Paperclip, Download, FileText, Film, File, Copy, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/select';
 import { CannedMessageDropdown } from '@/components/common/CannedMessageDropdown';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +69,7 @@ interface Ticket {
   assigned_to?: string;
   region_id?: string;
   resolved_at?: string;
+  ticket_group_id?: string;
 }
 
 interface SupplierStats {
@@ -221,6 +221,7 @@ interface TicketDetailProps {
 export default function TicketDetail({ ticketId, embedded = false, onClose, onRefresh }: TicketDetailProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const addCommentRef = useRef<() => void>(() => {});
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -234,12 +235,10 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [showResolvedBreakdown, setShowResolvedBreakdown] = useState(false);
   const [allSupplierTickets, setAllSupplierTickets] = useState<any[]>([]);
   const [showAllTicketsModal, setShowAllTicketsModal] = useState(false);
-
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-
   const [mediaViewer, setMediaViewer] = useState<{ open: boolean; url: string; type: 'image' | 'video' | 'pdf'; name: string }>({ open: false, url: '', type: 'image', name: '' });
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
@@ -248,30 +247,30 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [watchers, setWatchers] = useState<any[]>([]);
   const [cannedQuery, setCannedQuery] = useState<string | null>(null);
 
-
-  
-
-  
-useEffect(() => {
-  if (ticketId) fetchTicketData();
-}, [ticketId]);
-
+  // ── Keyboard shortcuts (ref trick avoids "used before declaration" TS error) ──
+  useKeyboardShortcuts({
+    onSendMessage: () => addCommentRef.current(),
+    onCloseTicket: onClose,
+    onAssignTicket: () => setReassignDialogOpen(true),
+  });
 
   useEffect(() => {
-  if (!ticketId) return;
-  const channel = supabase
-    .channel(`comments-${ticketId}`)
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'comments',
-      filter: `ticket_id=eq.${ticketId}`,
-    }, () => {
-      fetchTicketData();
-    })
-    .subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, [ticketId]);
+    if (ticketId) fetchTicketData();
+  }, [ticketId]);
+
+  useEffect(() => {
+    if (!ticketId) return;
+    const channel = supabase
+      .channel(`comments-${ticketId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'comments',
+        filter: `ticket_id=eq.${ticketId}`,
+      }, () => { fetchTicketData(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [ticketId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -285,6 +284,7 @@ useEffect(() => {
       if (!user) throw new Error('Not authenticated');
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      setCurrentUser(profile);
 
       const { data: ticketData, error: ticketError } = await supabase
         .from('tickets')
@@ -297,7 +297,7 @@ useEffect(() => {
           region:regions(id, name, manager:profiles!regions_manager_id_fkey(full_name))
         `)
         .eq('id', ticketId)
-        .maybeSingle()
+        .maybeSingle();
       if (ticketError) throw ticketError;
       if (!ticketData) { setLoading(false); return; }
 
@@ -334,20 +334,16 @@ useEffect(() => {
       setCommentAttachments(commentAttachmentsMap);
 
       if (ticketData?.ticket_group_id) {
-  const { data: watchersData } = await supabase
-        .from('ticket_watchers')
-        .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
-        .eq('ticket_group_id', ticketData.ticket_group_id);
-      setWatchers((watchersData || []).map(w => w.user).filter(Boolean));
-    } else {
-      setWatchers([]);
-    }
-
-
-      // Fetch supplier stats
-      if (ticketData?.supplier_id) {
-        fetchSupplierStats(ticketData.supplier_id);
+        const { data: watchersData } = await supabase
+          .from('ticket_watchers')
+          .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
+          .eq('ticket_group_id', ticketData.ticket_group_id);
+        setWatchers((watchersData || []).map((w: any) => w.user).filter(Boolean));
+      } else {
+        setWatchers([]);
       }
+
+      if (ticketData?.supplier_id) fetchSupplierStats(ticketData.supplier_id);
     } catch (error) {
       console.error('Error fetching ticket:', error);
       toast({ title: 'Error loading ticket', variant: 'destructive' });
@@ -357,27 +353,21 @@ useEffect(() => {
   };
 
   const handleEscalateToWatcher = async (watcherId: string) => {
-  await supabase.from('tickets').update({ assigned_to: watcherId }).eq('id', ticketId);
-  toast({ title: 'Ticket assigned to watcher' });
-  fetchTicketData(); onRefresh?.();
-};
+    await supabase.from('tickets').update({ assigned_to: watcherId }).eq('id', ticketId);
+    toast({ title: 'Ticket assigned to watcher' });
+    fetchTicketData(); onRefresh?.();
+  };
 
   const fetchSupplierStats = async (supplierId: string) => {
     try {
-      const { data } = await supabase
-        .from('tickets')
-        .select('status, created_at, resolved_at')
-        .eq('supplier_id', supplierId);
+      const { data } = await supabase.from('tickets').select('status, created_at, resolved_at').eq('supplier_id', supplierId);
       if (!data) return;
-
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const firstDate = data.length > 0
-        ? new Date(Math.min(...data.map(t => new Date(t.created_at).getTime())))
-        : now;
+        ? new Date(Math.min(...data.map(t => new Date(t.created_at).getTime()))) : now;
       const daysSince = Math.max(1, Math.ceil((now.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)));
-
       setSupplierStats({
         total: data.length,
         active: data.filter(t => !['resolved', 'closed'].includes(t.status)).length,
@@ -386,17 +376,13 @@ useEffect(() => {
         last7Days: data.filter(t => new Date(t.created_at) >= sevenDaysAgo).length,
         last30Days: data.filter(t => new Date(t.created_at) >= thirtyDaysAgo).length,
       });
-
       setAllSupplierTickets(data);
-    } catch (error) {
-      console.error('Error fetching supplier stats:', error);
-    }
+    } catch (error) { console.error('Error fetching supplier stats:', error); }
   };
 
   const loadAllSupplierTickets = async () => {
     if (!ticket?.supplier_id) return;
-    const { data } = await supabase
-      .from('tickets')
+    const { data } = await supabase.from('tickets')
       .select('id, ticket_number, subject, status, created_at')
       .eq('supplier_id', ticket.supplier_id)
       .order('created_at', { ascending: false });
@@ -435,16 +421,15 @@ useEffect(() => {
       }).select('*, user:profiles(full_name)').single();
       if (error) throw error;
       if (uploadFiles.length > 0) await uploadAttachments(uploadFiles, ticketId!, data.id);
-
-      // Update needs_response and latest_comment_preview
       await supabase.from('tickets').update({
         needs_response: false,
         latest_comment_preview: newComment.slice(0, 100),
-        ...(ticket.status === 'new' ? { status: 'in_progress' } : {}),
+        ...(ticket?.status === 'new' ? { status: 'in_progress' } : {}),
       }).eq('id', ticketId);
-
       toast({ title: isInternal ? 'Internal note added' : 'Reply sent' });
-      setNewComment(''); setUploadFiles([]);
+      setNewComment('');
+      setUploadFiles([]);
+      setCannedQuery(null);
       fetchTicketData();
       onRefresh?.();
     } catch (error) {
@@ -453,6 +438,9 @@ useEffect(() => {
       setSubmitting(false);
     }
   };
+
+  // Wire ref AFTER handleAddComment is declared
+  addCommentRef.current = handleAddComment;
 
   const handleResolve = async () => {
     try {
@@ -485,15 +473,6 @@ useEffect(() => {
     } catch { toast({ title: 'Error escalating ticket', variant: 'destructive' }); }
   };
 
-  const handleClose = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: user?.id }).eq('id', ticketId);
-      toast({ title: 'Ticket Closed' });
-      fetchTicketData(); onRefresh?.();
-    } catch { toast({ title: 'Error closing ticket', variant: 'destructive' }); }
-  };
-
   const handleViewAttachment = (attachment: Attachment) => {
     const type = getFileType(attachment.mime_type, attachment.file_name);
     if (type === 'other') { window.open(attachment.file_url, '_blank'); return; }
@@ -517,7 +496,6 @@ useEffect(() => {
     }
   };
 
-  
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: 'Copied!' });
@@ -539,14 +517,9 @@ useEffect(() => {
     );
   }
 
-  const isAssigned = currentUser?.id === ticket.assigned_to;
   const isManager = currentUser?.region_id === ticket.region_id;
-  const canReply = !currentUser || isAssigned || isManager || currentUser?.role === 'super_admin';
-  useKeyboardShortcuts({
-  onSendMessage: handleAddComment,
-  onCloseTicket: onClose,
-  onAssignTicket: () => setReassignDialogOpen(true),
-});
+  const canReply = true;
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* Media Viewer */}
@@ -576,14 +549,12 @@ useEffect(() => {
               All Tickets ({supplierStats?.total ?? 0})
             </Button>
           </div>
-
           <div className="flex items-center gap-2">
             {ticket.sla_due_at && ticket.status !== 'resolved' && ticket.status !== 'closed' && (
               <SLATimer remaining={ticket.sla_due_at} status={(ticket.sla_status as any) || 'on-track'} />
             )}
           </div>
         </div>
-
 
         {/* SLA breach warning */}
         {isManager && !ticket.manager_intervened && ticket.sla_status === 'breached' && (
@@ -622,7 +593,7 @@ useEffect(() => {
             </p>
           </div>
 
-          {/* Comments as chat bubbles */}
+          {/* Comments */}
           {comments.map(comment => {
             const attachments = commentAttachments[comment.id] || [];
             const isAgent = comment.comment_source === 'agent';
@@ -673,7 +644,6 @@ useEffect(() => {
               );
             }
 
-            // Supplier message
             return (
               <div key={comment.id} className="flex justify-start">
                 <div className="flex items-end gap-2 max-w-[75%]">
@@ -748,17 +718,11 @@ useEffect(() => {
                 onRemove={i => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}
               />
 
-              {/* Wrap in relative so dropdown positions correctly */}
               <div className="flex items-center gap-2 relative">
-
-                {/* Canned message dropdown */}
                 {cannedQuery !== null && (
                   <CannedMessageDropdown
                     query={cannedQuery}
-                    onSelect={text => {
-                      setNewComment(text);
-                      setCannedQuery(null);
-                    }}
+                    onSelect={text => { setNewComment(text); setCannedQuery(null); }}
                     onClose={() => setCannedQuery(null)}
                   />
                 )}
@@ -814,12 +778,10 @@ useEffect(() => {
         <div className="p-4 border-b border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact & Ticket Info</p>
           <div className="space-y-3">
-
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Business</p>
               <p className="text-sm font-semibold text-foreground">{ticket.supplier_name}</p>
             </div>
-
             {ticket.supplier_phone && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Phone</p>
@@ -831,23 +793,18 @@ useEffect(() => {
                 </div>
               </div>
             )}
-
             {ticket.supplier_address && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Address</p>
                 <p className="text-sm text-foreground">{ticket.supplier_address}</p>
               </div>
             )}
-
             {ticket.supplier_order_count !== undefined && ticket.supplier_order_count !== null && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Order Count</p>
                 <p className="text-sm font-semibold text-foreground">{ticket.supplier_order_count}</p>
               </div>
             )}
-
-            
-
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Ticket #</p>
@@ -863,9 +820,9 @@ useEffect(() => {
                 <p className="text-xs text-foreground">{format(new Date(ticket.created_at), 'MMM dd, HH:mm')}</p>
               </div>
               <div>
-  <p className="text-xs text-muted-foreground mb-0.5">City</p>
-  <p className="text-xs text-foreground">{ticket.city || ticket.city || '—'}</p>
-</div>
+                <p className="text-xs text-muted-foreground mb-0.5">City</p>
+                <p className="text-xs text-foreground">{ticket.city || '—'}</p>
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Priority</p>
                 <PriorityBadge priority={ticket.priority as any} />
@@ -887,8 +844,8 @@ useEffect(() => {
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="new">Pending</SelectItem>
-<SelectItem value="in_progress">In Progress</SelectItem>
-<SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -919,47 +876,43 @@ useEffect(() => {
         </div>
 
         {/* Assignment Info */}
-        
         <div className="p-4 border-b border-border">
-  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assignment</p>
-  <div className="space-y-2 text-sm">
-    <div className="flex items-center gap-2">
-      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-        {getInitials(ticket.assigned_user?.full_name)}
-      </div>
-      <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
-    </div>
-    {ticket.team?.name && <p className="text-xs text-muted-foreground">Team: {ticket.team.name}</p>}
-    {ticket.region?.name && (
-      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-        {ticket.region.name}
-      </Badge>
-    )}
-    {watchers.length > 0 && (
-      <div className="pt-2 border-t border-border">
-        <p className="text-xs text-muted-foreground mb-1.5">Watchers</p>
-        <div className="space-y-1.5">
-          {watchers.map(w => (
-            <div key={w.id} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
-                  {getInitials(w.full_name)}
-                </div>
-                <span className="text-xs text-foreground">{w.full_name}</span>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assignment</p>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                {getInitials(ticket.assigned_user?.full_name)}
               </div>
-              <button
-                onClick={() => handleEscalateToWatcher(w.id)}
-                className="text-xs text-primary hover:underline"
-              >
-                Escalate
-              </button>
+              <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
             </div>
-          ))}
+            {ticket.team?.name && <p className="text-xs text-muted-foreground">Team: {ticket.team.name}</p>}
+            {ticket.region?.name && (
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                {ticket.region.name}
+              </Badge>
+            )}
+            {watchers.length > 0 && (
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1.5">Watchers</p>
+                <div className="space-y-1.5">
+                  {watchers.map((w: any) => (
+                    <div key={w.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
+                          {getInitials(w.full_name)}
+                        </div>
+                        <span className="text-xs text-foreground">{w.full_name}</span>
+                      </div>
+                      <button onClick={() => handleEscalateToWatcher(w.id)} className="text-xs text-primary hover:underline">
+                        Escalate
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    )}
-  </div>
-</div>
 
         {/* Supplier Ticket History */}
         <div className="p-4">
@@ -980,14 +933,12 @@ useEffect(() => {
                   <p className="text-base font-bold text-foreground">{supplierStats.last30Days}</p>
                 </div>
               </div>
-
               <div className="border border-orange-200 rounded-lg p-3 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900">
                 <div className="flex items-center justify-between">
                   <h5 className="text-sm font-semibold text-orange-900 dark:text-orange-400">Active Tickets</h5>
                   <span className="text-lg font-bold text-orange-600">{supplierStats.active}</span>
                 </div>
               </div>
-
               <div
                 className="border border-green-200 rounded-lg p-3 bg-green-50 dark:bg-green-950/20 dark:border-green-900 cursor-pointer"
                 onClick={() => setShowResolvedBreakdown(p => !p)}
