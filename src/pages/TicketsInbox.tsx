@@ -328,6 +328,7 @@ useEffect(() => {
   const fetchTickets = async () => {
     try {
       setLoading(true);
+      console.log('fetchTickets called', { currentView, currentUser: currentUser?.id, region_id: currentUser?.region_id });
       let query = supabase
         .from('tickets')
         .select(`
@@ -360,6 +361,7 @@ useEffect(() => {
       if (statusFilter !== 'All') query = query.eq('status', statusMap[statusFilter]);
 
       const { data, error } = await query;
+      console.log('tickets result', { count: data?.length, error });
       if (error) throw error;
       setTickets(data || []);
 
