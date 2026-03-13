@@ -145,6 +145,32 @@ export default function Broadcasts() {
   const [doneAttachments, setDoneAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Supplier search
+  const [supplierSearch,    setSupplierSearch]    = useState('');
+  const [supplierDropOpen,  setSupplierDropOpen]  = useState(false);
+  const [selectedSupplier,  setSelectedSupplier]  = useState<Supplier | null>(null);
+  const supplierRef = useRef<HTMLDivElement>(null);
+
+  const filteredSuppliers = suppliers.filter((s) => {
+    const q = supplierSearch.toLowerCase();
+    return (
+      s.business_name.toLowerCase().includes(q) ||
+      s.city.toLowerCase().includes(q) ||
+      s.supplier_uid.toLowerCase().includes(q)
+    );
+  }).slice(0, 20); // cap dropdown to 20 results
+
+  // Close supplier dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
+        setSupplierDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const totalAttachments = linkRows.filter(l => l.url.trim()).length + doneAttachments.length;
   const uploading        = uploadingFiles.some(f => !f.done);
 
@@ -185,6 +211,7 @@ export default function Broadcasts() {
     setBroadcastType('general'); setTargetType('all'); setTargetValue('');
     setIsUrgent(false); setExpiresAt('');
     setLinkRows([]); setUploadingFiles([]); setDoneAttachments([]);
+    setSupplierSearch(''); setSelectedSupplier(null); setSupplierDropOpen(false);
   };
 
   // ── Link rows ────────────────────────────────────────────────────────────────
@@ -640,7 +667,7 @@ export default function Broadcasts() {
             {/* Target */}
             <div className="space-y-2">
               <Label>Send To</Label>
-              <Select value={targetType} onValueChange={(v) => { setTargetType(v); setTargetValue(''); }}>
+              <Select value={targetType} onValueChange={(v) => { setTargetType(v); setTargetValue(''); setSelectedSupplier(null); setSupplierSearch(''); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   {TARGET_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -675,16 +702,59 @@ export default function Broadcasts() {
             {targetType === 'supplier' && (
               <div className="space-y-2">
                 <Label>Select Supplier</Label>
-                <Select value={targetValue} onValueChange={setTargetValue}>
-                  <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {suppliers.map(s => (
-                      <SelectItem key={s.id} value={s.supplier_uid}>
-                        {s.business_name} — {s.city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative" ref={supplierRef}>
+                  {/* Selected pill or search input */}
+                  {selectedSupplier ? (
+                    <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{selectedSupplier.business_name}</p>
+                        <p className="text-xs text-muted-foreground">{selectedSupplier.city} · {selectedSupplier.supplier_uid}</p>
+                      </div>
+                      <button type="button"
+                        className="text-muted-foreground hover:text-destructive ml-2 shrink-0"
+                        onClick={() => { setSelectedSupplier(null); setTargetValue(''); setSupplierSearch(''); }}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name, city, or UID..."
+                        className="pl-9"
+                        value={supplierSearch}
+                        onChange={(e) => { setSupplierSearch(e.target.value); setSupplierDropOpen(true); }}
+                        onFocus={() => setSupplierDropOpen(true)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Dropdown results */}
+                  {supplierDropOpen && !selectedSupplier && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg max-h-52 overflow-y-auto">
+                      {filteredSuppliers.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-center text-muted-foreground">No suppliers found</p>
+                      ) : filteredSuppliers.map((s) => (
+                        <button key={s.id} type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-secondary/50 transition-colors"
+                          onClick={() => {
+                            setSelectedSupplier(s);
+                            setTargetValue(s.supplier_uid);
+                            setSupplierDropOpen(false);
+                            setSupplierSearch('');
+                          }}>
+                          <p className="text-sm font-medium text-foreground">{s.business_name}</p>
+                          <p className="text-xs text-muted-foreground">{s.city} · {s.supplier_uid}</p>
+                        </button>
+                      ))}
+                      {filteredSuppliers.length === 20 && (
+                        <p className="px-3 py-2 text-xs text-center text-muted-foreground border-t border-border">
+                          Showing top 20 — type more to narrow down
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
