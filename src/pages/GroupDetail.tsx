@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Users, MessageSquare, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Users, MessageSquare, FileText, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +13,12 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import TicketDetail from './TicketDetail';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,6 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved';
+
+const STATUS_TABS: { id: StatusTab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'new', label: 'Pending' },
+  { id: 'in_progress', label: 'In Progress' },
+  { id: 'resolved', label: 'Resolved' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +182,8 @@ export default function GroupDetail() {
   const [resolutionNote, setResolutionNote] = useState('');
   const [notifySupplier, setNotifySupplier] = useState(true);
   const [closeTickets, setCloseTickets] = useState(false);
+  const [statusTab, setStatusTab] = useState<StatusTab>('all');
+  const [agentFilter, setAgentFilter] = useState<string>('all');
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
 
@@ -238,7 +257,9 @@ export default function GroupDetail() {
 
   const handleSelectAll = () => {
     setSelectedIds(
-      selectedIds.length === groupTickets.length ? [] : groupTickets.map(t => t.id)
+      selectedIds.length === filteredTickets.length && filteredTickets.length > 0
+        ? []
+        : filteredTickets.map(t => t.id)
     );
   };
 
@@ -306,6 +327,33 @@ export default function GroupDetail() {
     }
   };
 
+  // ── Derived ──────────────────────────────────────────────────────────────────
+
+  const uniqueAgents = useMemo(() => {
+    const map = new Map<string, string>();
+    groupTickets.forEach(t => {
+      if (t.assigned_user?.full_name && t.assigned_to) {
+        map.set(t.assigned_to, t.assigned_user.full_name);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [groupTickets]);
+
+  const filteredTickets = useMemo(() => {
+    return groupTickets.filter(t => {
+      const statusMatch = statusTab === 'all' || t.status === statusTab;
+      const agentMatch = agentFilter === 'all' || t.assigned_to === agentFilter;
+      return statusMatch && agentMatch;
+    });
+  }, [groupTickets, statusTab, agentFilter]);
+
+  const statusCounts = useMemo(() => ({
+    all: groupTickets.length,
+    new: groupTickets.filter(t => t.status === 'new').length,
+    in_progress: groupTickets.filter(t => t.status === 'in_progress').length,
+    resolved: groupTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length,
+  }), [groupTickets]);
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -353,8 +401,28 @@ export default function GroupDetail() {
             <div className="flex-1 min-w-0 mr-3">
               <h1 className="text-base font-bold text-foreground leading-tight">{group.name}</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {groupTickets.length} tickets · {group.assigned_user?.full_name || 'Unassigned'}
+                {groupTickets.length} tickets
               </p>
+              {/* Stacked agent avatars */}
+              {uniqueAgents.length > 0 && (
+                <div className="flex items-center mt-2 gap-1.5">
+                  <div className="flex -space-x-1.5">
+                    {uniqueAgents.slice(0, 5).map((agent, i) => (
+                      <div
+                        key={agent.id}
+                        title={agent.name}
+                        className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium ring-2 ring-background"
+                        style={{ zIndex: uniqueAgents.length - i }}
+                      >
+                        {getInitials(agent.name)}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {uniqueAgents.map(a => a.name.split(' ')[0]).join(', ')}
+                  </span>
+                </div>
+              )}
             </div>
             <SLATimer remaining={slaRemaining} status={slaStatus as any} />
           </div>
@@ -363,7 +431,7 @@ export default function GroupDetail() {
         {/* Quick Actions */}
         <div className="px-4 py-2.5 border-b border-border flex items-center gap-2 flex-shrink-0">
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleSelectAll}>
-            {selectedIds.length === groupTickets.length ? 'Deselect All' : 'Select All'}
+            {selectedIds.length === filteredTickets.length && filteredTickets.length > 0 ? 'Deselect All' : 'Select All'}
           </Button>
 
           <Button
@@ -385,16 +453,69 @@ export default function GroupDetail() {
             <Users className="w-3.5 h-3.5 mr-1" />
             Reassign
           </Button>
+
+          {/* Agent filter */}
+          {uniqueAgents.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs ml-auto">
+                  {agentFilter === 'all' ? 'All Agents' : uniqueAgents.find(a => a.id === agentFilter)?.name.split(' ')[0]}
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover">
+                <DropdownMenuItem onClick={() => setAgentFilter('all')}>
+                  All Agents
+                </DropdownMenuItem>
+                {uniqueAgents.map(agent => (
+                  <DropdownMenuItem key={agent.id} onClick={() => setAgentFilter(agent.id)}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium">
+                        {getInitials(agent.name)}
+                      </div>
+                      {agent.name}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        {/* Status Tabs */}
+        <div className="flex border-b border-border flex-shrink-0">
+          {STATUS_TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => { setStatusTab(tab.id); setSelectedTicketId(null); }}
+              className={cn(
+                'flex-1 py-2 text-xs font-medium transition-colors relative',
+                statusTab === tab.id
+                  ? 'text-primary border-b-2 border-primary -mb-px'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab.label}
+              {statusCounts[tab.id] > 0 && (
+                <span className={cn(
+                  'ml-1 px-1.5 py-0.5 rounded-full text-xs',
+                  statusTab === tab.id ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
+                )}>
+                  {statusCounts[tab.id]}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Ticket List */}
-        <div className="flex-1 overflow-y-auto">
-          {groupTickets.length === 0 ? (
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {filteredTickets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-              <p className="text-muted-foreground">No tickets in this group</p>
+              <p className="text-muted-foreground text-sm">No tickets match this filter</p>
             </div>
           ) : (
-            groupTickets.map(ticket => (
+            filteredTickets.map(ticket => (
               <TicketRow
                 key={ticket.id}
                 ticket={ticket}
