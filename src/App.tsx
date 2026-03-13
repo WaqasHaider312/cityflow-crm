@@ -18,6 +18,8 @@ import RegionsManagement from '@/pages/RegionsManagement';
 import CityMapping from '@/pages/CityMapping';
 import Broadcasts from "@/pages/Broadcasts";
 import FAQs from "@/pages/FAQs";
+import CannedMessages from '@/pages/CannedMessages';
+
 
 const queryClient = new QueryClient();
 
@@ -51,6 +53,7 @@ const App = () => (
             <Route path="/cities" element={<CityMapping />} />
             <Route path="/broadcasts" element={<Broadcasts />} />
             <Route path="/faqs" element={<FAQs />} />
+            <Route path="/canned-messages" element={<CannedMessages />} />
           </Route>
 
           {/* Catch-all */}
