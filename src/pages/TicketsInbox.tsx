@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
 import { SLATimer } from '@/components/common/SLATimer';
-import { BulkActionsBar } from '@/components/tickets/BulkActionsBar';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
@@ -68,11 +67,10 @@ interface Ticket {
 }
 
 type SortType = 'needs-reply' | 'newest' | 'oldest' | 'longest-wait';
-type ViewType = 'all' | 'open' | 'mine' | 'unassigned' | 'resolved';
+type ViewType = 'all' | 'open' | 'mine' | 'resolved' | 'all_resolved';
 
 const statusMap: Record<string, string> = {
-  'All': 'All', 'New': 'new', 'In Progress': 'in_progress',
-  'Pending': 'pending', 'Resolved': 'resolved', 'Closed': 'closed'
+  'All': 'All', 'Pending': 'new', 'In Progress': 'in_progress', 'Resolved': 'resolved'
 };
 
 
@@ -97,9 +95,9 @@ const needsReply = (t: Ticket) =>
 
 const VIEWS: { id: ViewType; label: string }[] = [
   { id: 'open', label: 'My Open Tickets' },
-  { id: 'unassigned', label: 'Unassigned Tickets' },
   { id: 'mine', label: 'All Assigned' },
   { id: 'resolved', label: 'Resolved Today' },
+  { id: 'all_resolved', label: 'All Resolved' },
   { id: 'all', label: 'All Tickets Ever' },
 ];
 
@@ -163,7 +161,7 @@ function TicketCard({
 
         {/* Row 3: latest message preview */}
         <p className="text-xs text-muted-foreground mb-1.5 leading-relaxed">
-  {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 60)}
+  {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 90)}
 </p>
 
         {/* Row 4: meta + SLA + time */}
@@ -189,7 +187,22 @@ function TicketCard({
 
 // ─── Empty Detail Panel ───────────────────────────────────────────────────────
 
-function EmptyDetail() {
+function EmptyDetail({ selectedCount, onSendBulk, onClear }: { selectedCount: number; onSendBulk?: () => void; onClear?: () => void }) {
+  if (selectedCount > 1) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-background text-center px-8">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <MessageSquare className="w-8 h-8 text-primary" />
+        </div>
+        <h3 className="text-lg font-semibold text-foreground mb-2">{selectedCount} tickets selected</h3>
+        <p className="text-sm text-muted-foreground mb-6">Send a message to all selected tickets at once</p>
+        <div className="flex gap-3">
+          <Button onClick={onSendBulk}>Send Bulk Message</Button>
+          <Button variant="outline" onClick={onClear}>Clear Selection</Button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-background text-center px-8">
       <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -223,8 +236,8 @@ export default function TicketsInbox() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ViewType>('open');
   const [viewCounts, setViewCounts] = useState<Record<ViewType, number>>({
-    open: 0, unassigned: 0, mine: 0, resolved: 0, all: 0,
-  });
+  open: 0, mine: 0, resolved: 0, all_resolved: 0, all: 0,
+});
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -260,7 +273,20 @@ export default function TicketsInbox() {
   const [addingToGroup, setAddingToGroup] = useState(false);
 
   // ── Init ─────────────────────────────────────────────────────────────────────
-  useEffect(() => { fetchCurrentUser(); }, []);
+  useEffect(() => {
+  if (!currentUser) return;
+  const channel = supabase
+    .channel('tickets-realtime')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'tickets',
+    }, () => {
+      fetchTickets();
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}, [currentUser, currentView]);
   useEffect(() => {
     if (currentUser) { fetchTickets(); fetchTeamsAndUsers(); fetchGroups(); }
   }, [currentUser, currentView, statusFilter, topicFilter]);
@@ -269,6 +295,8 @@ export default function TicketsInbox() {
 useEffect(() => {
     if (activeView) setSelectedView(activeView);
   }, [activeView]);
+
+  
   // ── Scroll auto-load ──────────────────────────────────────────────────────────
   useEffect(() => {
     const el = scrollRef.current;
@@ -318,13 +346,15 @@ useEffect(() => {
       // View filters
       if (currentView === 'open') {
         query = query.eq('assigned_to', currentUser.id).not('status', 'in', '(resolved,closed)');
-      } else if (currentView === 'unassigned') {
-        query = query.is('assigned_to', null).not('status', 'in', '(resolved,closed)');
       } else if (currentView === 'mine') {
         query = query.not('status', 'in', '(resolved,closed)').not('assigned_to', 'is', null);
-      } else if (currentView === 'resolved') {
+      } 
+      else if (currentView === 'resolved') {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         query = query.eq('status', 'resolved').gte('resolved_at', today.toISOString());
+      }
+      else if (currentView === 'all_resolved') {
+        query = query.eq('status', 'resolved');
       }
 
       if (statusFilter !== 'All') query = query.eq('status', statusMap[statusFilter]);
@@ -337,12 +367,12 @@ useEffect(() => {
       const all = data || [];
       const today = new Date(); today.setHours(0, 0, 0, 0);
       setViewCounts({
-        open: all.filter(t => t.assigned_to === currentUser?.id && !['resolved', 'closed'].includes(t.status)).length,
-        unassigned: all.filter(t => !t.assigned_to && !['resolved', 'closed'].includes(t.status)).length,
-        mine: all.filter(t => t.assigned_to && !['resolved', 'closed'].includes(t.status)).length,
-        resolved: all.filter(t => t.status === 'resolved' && new Date(t.resolved_at) >= today).length,
-        all: all.length,
-      });
+  open: all.filter(t => t.assigned_to === currentUser?.id && !['resolved'].includes(t.status)).length,
+  mine: all.filter(t => t.assigned_to && !['resolved'].includes(t.status)).length,
+  resolved: all.filter(t => t.status === 'resolved' && new Date(t.resolved_at) >= today).length,
+  all_resolved: all.filter(t => t.status === 'resolved').length,
+  all: all.length,
+});
     } catch (error) {
       console.error('Error fetching tickets:', error);
       toast({ title: 'Error loading tickets', variant: 'destructive' });
@@ -587,11 +617,9 @@ useEffect(() => {
               className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
             >
               <option>All</option>
-              <option>New</option>
-              <option>In Progress</option>
-              <option>Pending</option>
-              <option>Resolved</option>
-              <option>Closed</option>
+                    <option>Pending</option>
+                    <option>In Progress</option>
+                  <option>Resolved</option>
             </select>
           </div>
 
@@ -671,20 +699,12 @@ useEffect(() => {
             embedded
           />
         ) : (
-          <EmptyDetail />
-        )}
+<EmptyDetail 
+  selectedCount={selectedIds.length} 
+  onSendBulk={() => { setResponseText(''); setResponseIsInternal(false); setResponseDialogOpen(true); }}
+  onClear={() => setSelectedIds([])}
+/>        )}
       </div>
-
-      {/* ── Bulk Actions Bar ───────────────────────────────────────────────── */}
-      <BulkActionsBar
-        selectedCount={selectedIds.length}
-        onClear={() => setSelectedIds([])}
-        onResolve={handleBulkResolve}
-        onReassign={() => { setReassignType(null); setReassignTargetId(''); setReassignDialogOpen(true); }}
-        onEscalate={handleBulkEscalate}
-        onGroup={() => { setGroupAction(null); setGroupDialogOpen(true); }}
-        onRespond={() => { setResponseText(''); setResponseIsInternal(false); setResponseDialogOpen(true); }}
-      />
 
       {/* ── Bulk Reassign Dialog ───────────────────────────────────────────── */}
       <Dialog open={reassignDialogOpen} onOpenChange={o => { setReassignDialogOpen(o); if (!o) { setReassignType(null); setReassignTargetId(''); } }}>

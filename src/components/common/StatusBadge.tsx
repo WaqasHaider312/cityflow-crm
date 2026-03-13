@@ -8,7 +8,7 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<Status, { label: string; className: string }> = {
-  'new': { label: 'New', className: 'bg-primary text-primary-foreground' },
+  'new': { label: 'Pending', className: 'bg-warning/20 text-warning' },
   'assigned': { label: 'Assigned', className: 'bg-info text-info-foreground' },
   'in_progress': { label: 'In Progress', className: 'bg-warning text-warning-foreground' },
   'pending': { label: 'Pending', className: 'bg-warning/20 text-warning' },

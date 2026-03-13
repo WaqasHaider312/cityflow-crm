@@ -245,8 +245,20 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [watchers, setWatchers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (ticketId) { fetchTicketData(); }
-  }, [ticketId]);
+  if (!ticketId) return;
+  const channel = supabase
+    .channel(`comments-${ticketId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'comments',
+      filter: `ticket_id=eq.${ticketId}`,
+    }, () => {
+      fetchTicketData();
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}, [ticketId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -308,11 +320,15 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
       setTicketAttachments(ticketAttachmentsData || []);
       setCommentAttachments(commentAttachmentsMap);
 
-      const { data: watchersData } = await supabase
-  .from('ticket_watchers')
-  .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
-  .eq('ticket_id', ticketId);
-setWatchers((watchersData || []).map(w => w.user));
+      if (ticketData?.ticket_group_id) {
+  const { data: watchersData } = await supabase
+        .from('ticket_watchers')
+        .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
+        .eq('ticket_group_id', ticketData.ticket_group_id);
+      setWatchers((watchersData || []).map(w => w.user).filter(Boolean));
+    } else {
+      setWatchers([]);
+    }
 
 
       // Fetch supplier stats
@@ -411,6 +427,7 @@ setWatchers((watchersData || []).map(w => w.user));
       await supabase.from('tickets').update({
         needs_response: false,
         latest_comment_preview: newComment.slice(0, 100),
+        ...(ticket.status === 'new' ? { status: 'in_progress' } : {}),
       }).eq('id', ticketId);
 
       toast({ title: isInternal ? 'Internal note added' : 'Reply sent' });
@@ -543,7 +560,6 @@ setWatchers((watchersData || []).map(w => w.user));
           </div>
 
           <div className="flex items-center gap-2">
-            <StatusBadge status={ticket.status as any} />
             {ticket.sla_due_at && ticket.status !== 'resolved' && ticket.status !== 'closed' && (
               <SLATimer remaining={ticket.sla_due_at} status={(ticket.sla_status as any) || 'on-track'} />
             )}
@@ -755,13 +771,6 @@ setWatchers((watchersData || []).map(w => w.user));
               </div>
             )}
 
-            {ticket.city && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">City</p>
-                <p className="text-sm text-foreground">{ticket.city}</p>
-              </div>
-            )}
-
             {ticket.supplier_address && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Address</p>
@@ -816,11 +825,9 @@ setWatchers((watchersData || []).map(w => w.user));
               }}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="new">Pending</SelectItem>
+<SelectItem value="in_progress">In Progress</SelectItem>
+<SelectItem value="resolved">Resolved</SelectItem>
                 </SelectContent>
               </Select>
             </div>
