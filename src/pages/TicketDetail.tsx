@@ -19,6 +19,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { CannedMessageDropdown } from '@/components/common/CannedMessageDropdown';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -243,6 +246,10 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [selectedUser, setSelectedUser] = useState('');
   const [escalationNote, setEscalationNote] = useState('');
   const [watchers, setWatchers] = useState<any[]>([]);
+  const [cannedQuery, setCannedQuery] = useState<string | null>(null);
+
+
+  
 
   
 useEffect(() => {
@@ -510,6 +517,7 @@ useEffect(() => {
     }
   };
 
+  
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: 'Copied!' });
@@ -533,7 +541,12 @@ useEffect(() => {
 
   const isAssigned = currentUser?.id === ticket.assigned_to;
   const isManager = currentUser?.region_id === ticket.region_id;
-const canReply = !currentUser || isAssigned || isManager || currentUser?.role === 'super_admin';
+  const canReply = !currentUser || isAssigned || isManager || currentUser?.role === 'super_admin';
+  useKeyboardShortcuts({
+  onSendMessage: handleAddComment,
+  onCloseTicket: onClose,
+  onAssignTicket: () => setReassignDialogOpen(true),
+});
   return (
     <div className="flex h-full overflow-hidden">
       {/* Media Viewer */}
@@ -722,31 +735,74 @@ const canReply = !currentUser || isAssigned || isManager || currentUser?.role ==
             </div>
 
             <div className="p-3 space-y-2">
-  <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
-  <FileUploadPreview files={uploadFiles} onRemove={i => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))} />
-  <div className="flex items-center gap-2">
-    <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="text-muted-foreground h-8 w-8 flex-shrink-0">
-      <Paperclip className="w-4 h-4" />
-    </Button>
-    <Textarea
-      placeholder={isInternal ? 'Internal note...' : 'Type message or paste screenshot...'}
-      value={newComment}
-      onChange={e => setNewComment(e.target.value)}
-      onPaste={handlePaste}
-      rows={1}
-      maxLength={1000}
-      className={cn('resize-none flex-1', isInternal && 'bg-warning/5 border-warning/30')}
-    />
-    <Button
-      size="sm"
-      onClick={handleAddComment}
-      disabled={(!newComment.trim() && uploadFiles.length === 0) || submitting}
-      className={cn('flex-shrink-0', isInternal ? 'bg-warning hover:bg-warning/90' : '')}
-    >
-      {submitting ? '...' : isInternal ? 'Note' : 'Send'}
-    </Button>
-  </div>
-</div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <FileUploadPreview
+                files={uploadFiles}
+                onRemove={i => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}
+              />
+
+              {/* Wrap in relative so dropdown positions correctly */}
+              <div className="flex items-center gap-2 relative">
+
+                {/* Canned message dropdown */}
+                {cannedQuery !== null && (
+                  <CannedMessageDropdown
+                    query={cannedQuery}
+                    onSelect={text => {
+                      setNewComment(text);
+                      setCannedQuery(null);
+                    }}
+                    onClose={() => setCannedQuery(null)}
+                  />
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-muted-foreground h-8 w-8 flex-shrink-0"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </Button>
+
+                <Textarea
+                  placeholder={isInternal ? 'Internal note...' : 'Type message or paste screenshot... (type / for quick replies)'}
+                  value={newComment}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setNewComment(val);
+                    const slashIndex = val.lastIndexOf('/');
+                    if (slashIndex !== -1 && slashIndex === val.length - 1) {
+                      setCannedQuery('');
+                    } else if (slashIndex !== -1 && !val.slice(slashIndex + 1).includes(' ')) {
+                      setCannedQuery(val.slice(slashIndex + 1));
+                    } else {
+                      setCannedQuery(null);
+                    }
+                  }}
+                  onPaste={handlePaste}
+                  rows={1}
+                  maxLength={1000}
+                  className={cn('resize-none flex-1', isInternal && 'bg-warning/5 border-warning/30')}
+                />
+
+                <Button
+                  size="sm"
+                  onClick={handleAddComment}
+                  disabled={(!newComment.trim() && uploadFiles.length === 0) || submitting}
+                  className={cn('flex-shrink-0', isInternal ? 'bg-warning hover:bg-warning/90' : '')}
+                >
+                  {submitting ? '...' : isInternal ? 'Note' : 'Send'}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Users, MessageSquare, FileText, ChevronDown } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Users, MessageSquare, FileText, ChevronDown, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { SLATimer } from '@/components/common/SLATimer';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
 import { toast } from '@/hooks/use-toast';
@@ -12,6 +11,8 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import TicketDetail from './TicketDetail';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,10 +33,10 @@ import {
 type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved';
 
 const STATUS_TABS: { id: StatusTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'new', label: 'Pending' },
+  { id: 'all',         label: 'All'         },
+  { id: 'new',         label: 'Pending'     },
   { id: 'in_progress', label: 'In Progress' },
-  { id: 'resolved', label: 'Resolved' },
+  { id: 'resolved',    label: 'Resolved'    },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,11 +47,7 @@ const getInitials = (name?: string) =>
 // ─── TicketRow ────────────────────────────────────────────────────────────────
 
 function TicketRow({
-  ticket,
-  selected,
-  active,
-  onSelect,
-  onClick,
+  ticket, selected, active, onSelect, onClick,
 }: {
   ticket: any;
   selected: boolean;
@@ -74,9 +71,8 @@ function TicketRow({
         onClick={e => e.stopPropagation()}
         className="mt-1 h-4 w-4 rounded border-border text-primary cursor-pointer flex-shrink-0 accent-primary"
       />
-
       <div className="flex-1 min-w-0">
-        {/* Row 1: ticket number + status */}
+        {/* Row 1 */}
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5 text-primary flex-shrink-0" />
@@ -86,8 +82,7 @@ function TicketRow({
           </div>
           <StatusBadge status={ticket.status} />
         </div>
-
-        {/* Row 2: supplier name + agent avatar */}
+        {/* Row 2 */}
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm text-foreground font-medium truncate max-w-[180px]">
             {ticket.supplier_name || ticket.subject}
@@ -100,13 +95,11 @@ function TicketRow({
             <span className="text-xs text-muted-foreground">Unassigned</span>
           )}
         </div>
-
-        {/* Row 3: preview */}
+        {/* Row 3 */}
         <p className="text-xs text-muted-foreground mb-1.5 leading-relaxed truncate">
           {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 80)}
         </p>
-
-        {/* Row 4: meta + time */}
+        {/* Row 4 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             {ticket.issue_type && (
@@ -130,10 +123,12 @@ function TicketRow({
 function EmptyDetail({
   selectedCount,
   onBulkResolve,
+  onBulkReply,
   onClear,
 }: {
   selectedCount: number;
   onBulkResolve?: () => void;
+  onBulkReply?: () => void;
   onClear?: () => void;
 }) {
   if (selectedCount > 1) {
@@ -143,13 +138,17 @@ function EmptyDetail({
           <MessageSquare className="w-8 h-8 text-primary" />
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-2">{selectedCount} tickets selected</h3>
-        <p className="text-sm text-muted-foreground mb-6">Resolve all selected tickets at once</p>
-        <div className="flex gap-3">
-          <Button onClick={onBulkResolve}>
+        <p className="text-sm text-muted-foreground mb-6">Act on all selected tickets at once</p>
+        <div className="flex gap-3 flex-wrap justify-center">
+          <Button onClick={onBulkReply}>
+            <Send className="w-4 h-4 mr-2" />
+            Reply to All
+          </Button>
+          <Button variant="outline" onClick={onBulkResolve}>
             <CheckCircle2 className="w-4 h-4 mr-2" />
             Resolve Selected
           </Button>
-          <Button variant="outline" onClick={onClear}>Clear Selection</Button>
+          <Button variant="ghost" onClick={onClear}>Clear</Button>
         </div>
       </div>
     );
@@ -171,18 +170,28 @@ export default function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
   const [resolving, setResolving] = useState(false);
-  const [group, setGroup] = useState<any>(null);
+  const [sending, setSending]   = useState(false);
+  const [group, setGroup]       = useState<any>(null);
   const [groupTickets, setGroupTickets] = useState<any[]>([]);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds]           = useState<string[]>([]);
+
+  // Resolve dialog
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
-  const [resolutionNote, setResolutionNote] = useState('');
-  const [notifySupplier, setNotifySupplier] = useState(true);
-  const [closeTickets, setCloseTickets] = useState(false);
-  const [statusTab, setStatusTab] = useState<StatusTab>('all');
+  const [resolutionNote, setResolutionNote]       = useState('');
+  const [notifySupplier, setNotifySupplier]       = useState(true);
+  const [closeTickets, setCloseTickets]           = useState(false);
+
+  // Bulk reply dialog
+  const [replyDialogOpen, setReplyDialogOpen]   = useState(false);
+  const [replyText, setReplyText]               = useState('');
+  const [replyInternal, setReplyInternal]       = useState(false);
+
+  // Filters
+  const [statusTab, setStatusTab]   = useState<StatusTab>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
@@ -193,11 +202,7 @@ export default function GroupDetail() {
 
       const { data: groupData, error: groupError } = await supabase
         .from('ticket_groups')
-        .select(`
-          *,
-          issue_type:issue_types(name, icon),
-          assigned_user:profiles!assigned_to(full_name)
-        `)
+        .select(`*, issue_type:issue_types(name, icon), assigned_user:profiles!assigned_to(full_name)`)
         .eq('id', id)
         .single();
 
@@ -226,32 +231,35 @@ export default function GroupDetail() {
     }
   };
 
-  useEffect(() => {
-    if (id) fetchData();
-  }, [id]);
+  useEffect(() => { if (id) fetchData(); }, [id]);
 
-  // ── SLA ──────────────────────────────────────────────────────────────────────
+  // ── Derived ──────────────────────────────────────────────────────────────────
 
-  const calculateSLAStatus = () => {
-    if (!group?.sla_due_at) return 'on-track';
-    const now = new Date();
-    const dueAt = new Date(group.sla_due_at);
-    const timeRemaining = dueAt.getTime() - now.getTime();
-    if (timeRemaining < 0) return 'breached';
-    if (timeRemaining / (1000 * 60 * 60) <= 2) return 'warning';
-    return 'on-track';
-  };
+  const uniqueAgents = useMemo(() => {
+    const map = new Map<string, string>();
+    groupTickets.forEach(t => {
+      if (t.assigned_to && t.assigned_user?.full_name)
+        map.set(t.assigned_to, t.assigned_user.full_name);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [groupTickets]);
 
-  const formatSLARemaining = () => {
-    if (!group?.sla_due_at) return '0h 0m';
-    const now = new Date();
-    const dueAt = new Date(group.sla_due_at);
-    const timeRemaining = dueAt.getTime() - now.getTime();
-    const abs = Math.abs(timeRemaining);
-    const hours = Math.floor(abs / (1000 * 60 * 60));
-    const minutes = Math.floor((abs % (1000 * 60 * 60)) / (1000 * 60));
-    return timeRemaining < 0 ? `-${hours}h ${minutes}m` : `${hours}h ${minutes}m`;
-  };
+  const filteredTickets = useMemo(() => {
+    return groupTickets.filter(t => {
+      const statusMatch =
+        statusTab === 'all' ||
+        (statusTab === 'resolved' ? t.status === 'resolved' || t.status === 'closed' : t.status === statusTab);
+      const agentMatch = agentFilter === 'all' || t.assigned_to === agentFilter;
+      return statusMatch && agentMatch;
+    });
+  }, [groupTickets, statusTab, agentFilter]);
+
+  const statusCounts = useMemo(() => ({
+    all:         groupTickets.length,
+    new:         groupTickets.filter(t => t.status === 'new').length,
+    in_progress: groupTickets.filter(t => t.status === 'in_progress').length,
+    resolved:    groupTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length,
+  }), [groupTickets]);
 
   // ── Selection ────────────────────────────────────────────────────────────────
 
@@ -264,9 +272,7 @@ export default function GroupDetail() {
   };
 
   const handleSelectOne = (ticketId: string, checked: boolean) => {
-    setSelectedIds(prev =>
-      checked ? [...prev, ticketId] : prev.filter(sid => sid !== ticketId)
-    );
+    setSelectedIds(prev => checked ? [...prev, ticketId] : prev.filter(s => s !== ticketId));
   };
 
   // ── Bulk Resolve ─────────────────────────────────────────────────────────────
@@ -277,45 +283,24 @@ export default function GroupDetail() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const updates = {
+      await supabase.from('tickets').update({
         status: closeTickets ? 'closed' : 'resolved',
         resolved_at: new Date().toISOString(),
         resolved_by: user.id,
         resolution_note: resolutionNote,
-        ...(closeTickets && {
-          closed_at: new Date().toISOString(),
-          closed_by: user.id,
-        }),
-      };
+        ...(closeTickets && { closed_at: new Date().toISOString(), closed_by: user.id }),
+      }).in('id', selectedIds);
 
-      const { error: updateError } = await supabase
-        .from('tickets')
-        .update(updates)
-        .in('id', selectedIds);
-
-      if (updateError) throw updateError;
-
-      const { error: bulkError } = await supabase
-        .from('bulk_resolutions')
-        .insert({
-          ticket_group_id: id,
-          resolved_by: user.id,
-          resolution_note: resolutionNote,
-          ticket_ids: selectedIds,
-        });
-
-      if (bulkError) console.error('Bulk resolution record error:', bulkError);
-
-      toast({
-        title: 'Tickets Resolved',
-        description: `${selectedIds.length} ticket(s) resolved.`,
+      await supabase.from('bulk_resolutions').insert({
+        ticket_group_id: id,
+        resolved_by: user.id,
+        resolution_note: resolutionNote,
+        ticket_ids: selectedIds,
       });
 
-      // Clear detail panel if the open ticket was just resolved
-      if (selectedTicketId && selectedIds.includes(selectedTicketId)) {
-        setSelectedTicketId(null);
-      }
+      toast({ title: 'Tickets Resolved', description: `${selectedIds.length} ticket(s) resolved.` });
 
+      if (selectedTicketId && selectedIds.includes(selectedTicketId)) setSelectedTicketId(null);
       await fetchData();
       setResolveDialogOpen(false);
       setSelectedIds([]);
@@ -327,38 +312,43 @@ export default function GroupDetail() {
     }
   };
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
+  // ── Bulk Reply ───────────────────────────────────────────────────────────────
 
-  const uniqueAgents = useMemo(() => {
-    const map = new Map<string, string>();
-    groupTickets.forEach(t => {
-      if (t.assigned_user?.full_name && t.assigned_to) {
-        map.set(t.assigned_to, t.assigned_user.full_name);
-      }
-    });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [groupTickets]);
+  const handleBulkReply = async () => {
+    if (!replyText.trim()) return;
+    try {
+      setSending(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-  const filteredTickets = useMemo(() => {
-    return groupTickets.filter(t => {
-      const statusMatch = statusTab === 'all' || t.status === statusTab;
-      const agentMatch = agentFilter === 'all' || t.assigned_to === agentFilter;
-      return statusMatch && agentMatch;
-    });
-  }, [groupTickets, statusTab, agentFilter]);
+      await supabase.from('comments').insert(
+        selectedIds.map(ticketId => ({
+          ticket_id: ticketId,
+          user_id: user.id,
+          content: replyText,
+          is_internal: replyInternal,
+          comment_source: 'agent',
+        }))
+      );
 
-  const statusCounts = useMemo(() => ({
-    all: groupTickets.length,
-    new: groupTickets.filter(t => t.status === 'new').length,
-    in_progress: groupTickets.filter(t => t.status === 'in_progress').length,
-    resolved: groupTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length,
-  }), [groupTickets]);
+      toast({ title: replyInternal ? 'Notes added' : 'Replies sent', description: `Sent to ${selectedIds.length} ticket(s).` });
+      setReplyDialogOpen(false);
+      setReplyText('');
+      setReplyInternal(false);
+      setSelectedIds([]);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: 'Error sending replies', description: error.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
+      <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -366,70 +356,67 @@ export default function GroupDetail() {
 
   if (!group) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center h-full">
         <p className="text-muted-foreground">Group not found</p>
         <Button variant="ghost" className="mt-4" onClick={() => navigate('/tickets/grouped')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Groups
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Groups
         </Button>
       </div>
     );
   }
 
-  const slaStatus = calculateSLAStatus();
-  const slaRemaining = formatSLARemaining();
-
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    // Fix 2: h-full + overflow-hidden so nothing scrolls at page level
+    <div className="flex h-full overflow-hidden bg-background">
 
       {/* ── Panel 1: Group Info + Ticket List ─────────────────────────────── */}
-      <div className="w-[380px] flex-shrink-0 border-r border-border flex flex-col bg-background">
+      <div className="w-[380px] flex-shrink-0 border-r border-border flex flex-col bg-background overflow-hidden">
 
-        {/* Group Header */}
-        <div className="p-4 border-b border-border flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mb-3 -ml-2"
-            onClick={() => navigate('/tickets/grouped')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to Groups
-          </Button>
-
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0 mr-3">
-              <h1 className="text-base font-bold text-foreground leading-tight">{group.name}</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {groupTickets.length} tickets
-              </p>
-              {/* Stacked agent avatars */}
-              {uniqueAgents.length > 0 && (
-                <div className="flex items-center mt-2 gap-1.5">
-                  <div className="flex -space-x-1.5">
-                    {uniqueAgents.slice(0, 5).map((agent, i) => (
-                      <div
-                        key={agent.id}
-                        title={agent.name}
-                        className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium ring-2 ring-background"
-                        style={{ zIndex: uniqueAgents.length - i }}
-                      >
-                        {getInitials(agent.name)}
-                      </div>
-                    ))}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {uniqueAgents.map(a => a.name.split(' ')[0]).join(', ')}
-                  </span>
-                </div>
-              )}
-            </div>
-            <SLATimer remaining={slaRemaining} status={slaStatus as any} />
+        {/* Fix 4 & 5: Group header — back button top-right, no gap */}
+        <div className="px-4 pt-3 pb-3 border-b border-border flex-shrink-0">
+          {/* Top row: group name + back button */}
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="text-base font-bold text-foreground leading-tight flex-1 min-w-0">
+              {group.name}
+            </h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground hover:text-foreground flex-shrink-0 -mr-1"
+              onClick={() => navigate('/tickets/grouped')}
+            >
+              <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+              Groups
+            </Button>
           </div>
+
+          {/* Ticket count */}
+          <p className="text-xs text-muted-foreground mt-0.5">{groupTickets.length} tickets</p>
+
+          {/* Stacked agent avatars */}
+          {uniqueAgents.length > 0 && (
+            <div className="flex items-center mt-2 gap-1.5">
+              <div className="flex -space-x-1.5">
+                {uniqueAgents.slice(0, 5).map((agent, i) => (
+                  <div
+                    key={agent.id}
+                    title={agent.name}
+                    className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium ring-2 ring-background"
+                    style={{ zIndex: uniqueAgents.length - i }}
+                  >
+                    {getInitials(agent.name)}
+                  </div>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {uniqueAgents.map(a => a.name.split(' ')[0]).join(', ')}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
-        <div className="px-4 py-2.5 border-b border-border flex items-center gap-2 flex-shrink-0">
+        <div className="px-3 py-2 border-b border-border flex items-center gap-1.5 flex-shrink-0 flex-wrap">
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleSelectAll}>
             {selectedIds.length === filteredTickets.length && filteredTickets.length > 0 ? 'Deselect All' : 'Select All'}
           </Button>
@@ -444,6 +431,18 @@ export default function GroupDetail() {
             Resolve ({selectedIds.length})
           </Button>
 
+          {/* Fix 3: Bulk Reply button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={selectedIds.length === 0}
+            onClick={() => { setReplyText(''); setReplyInternal(false); setReplyDialogOpen(true); }}
+          >
+            <Send className="w-3.5 h-3.5 mr-1" />
+            Reply ({selectedIds.length})
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -454,19 +453,19 @@ export default function GroupDetail() {
             Reassign
           </Button>
 
-          {/* Agent filter */}
+          {/* Agent filter — only when 2+ agents */}
           {uniqueAgents.length > 1 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-7 text-xs ml-auto">
-                  {agentFilter === 'all' ? 'All Agents' : uniqueAgents.find(a => a.id === agentFilter)?.name.split(' ')[0]}
+                  {agentFilter === 'all'
+                    ? 'All Agents'
+                    : uniqueAgents.find(a => a.id === agentFilter)?.name.split(' ')[0]}
                   <ChevronDown className="w-3 h-3 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover">
-                <DropdownMenuItem onClick={() => setAgentFilter('all')}>
-                  All Agents
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAgentFilter('all')}>All Agents</DropdownMenuItem>
                 {uniqueAgents.map(agent => (
                   <DropdownMenuItem key={agent.id} onClick={() => setAgentFilter(agent.id)}>
                     <div className="flex items-center gap-2">
@@ -508,8 +507,12 @@ export default function GroupDetail() {
           ))}
         </div>
 
-        {/* Ticket List */}
-        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* Fix 2: overflow-y-auto with scrollbar hidden via inline style */}
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}
+        >
+          <style>{`.hide-scroll::-webkit-scrollbar { display: none; }`}</style>
           {filteredTickets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-center px-6">
               <p className="text-muted-foreground text-sm">No tickets match this filter</p>
@@ -542,6 +545,7 @@ export default function GroupDetail() {
           <EmptyDetail
             selectedCount={selectedIds.length}
             onBulkResolve={() => setResolveDialogOpen(true)}
+            onBulkReply={() => { setReplyText(''); setReplyInternal(false); setReplyDialogOpen(true); }}
             onClear={() => setSelectedIds([])}
           />
         )}
@@ -552,11 +556,8 @@ export default function GroupDetail() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Resolve {selectedIds.length} Ticket(s)</DialogTitle>
-            <DialogDescription>
-              Add a resolution note applied to all selected tickets.
-            </DialogDescription>
+            <DialogDescription>Add a resolution note applied to all selected tickets.</DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <Textarea
               placeholder="Enter resolution note..."
@@ -564,41 +565,74 @@ export default function GroupDetail() {
               onChange={e => setResolutionNote(e.target.value)}
               rows={4}
             />
-
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="notify"
-                  checked={notifySupplier}
-                  onCheckedChange={v => setNotifySupplier(v as boolean)}
-                />
-                <label htmlFor="notify" className="text-sm text-foreground">
-                  Notify supplier(s) about resolution
-                </label>
+                <Checkbox id="notify" checked={notifySupplier} onCheckedChange={v => setNotifySupplier(v as boolean)} />
+                <label htmlFor="notify" className="text-sm text-foreground">Notify supplier(s) about resolution</label>
               </div>
-
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="close"
-                  checked={closeTickets}
-                  onCheckedChange={v => setCloseTickets(v as boolean)}
-                />
-                <label htmlFor="close" className="text-sm text-foreground">
-                  Also close tickets after resolving
-                </label>
+                <Checkbox id="close" checked={closeTickets} onCheckedChange={v => setCloseTickets(v as boolean)} />
+                <label htmlFor="close" className="text-sm text-foreground">Also close tickets after resolving</label>
               </div>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResolveDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkResolve}
-              disabled={!resolutionNote.trim() || resolving}
-            >
+            <Button variant="outline" onClick={() => setResolveDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBulkResolve} disabled={!resolutionNote.trim() || resolving}>
               {resolving ? 'Resolving...' : 'Resolve Tickets'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Reply Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reply to {selectedIds.length} Ticket(s)</DialogTitle>
+            <DialogDescription>Send the same message to all selected tickets.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Reply / Internal toggle */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReplyInternal(false)}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  !replyInternal ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Reply to Supplier
+              </button>
+              <button
+                onClick={() => setReplyInternal(true)}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  replyInternal ? 'bg-warning text-white' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Internal Note
+              </button>
+            </div>
+            <Textarea
+              placeholder={replyInternal ? 'Internal note (only visible to team)...' : 'Reply to all selected tickets...'}
+              value={replyText}
+              onChange={e => setReplyText(e.target.value)}
+              rows={4}
+              className={cn(replyInternal && 'bg-warning/5 border-warning/30')}
+            />
+            {replyInternal && (
+              <p className="text-xs text-warning">Only visible to your team, not suppliers.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleBulkReply}
+              disabled={!replyText.trim() || sending}
+              className={cn(replyInternal && 'bg-warning hover:bg-warning/90')}
+            >
+              {sending ? 'Sending...' : replyInternal ? 'Add Notes' : 'Send Replies'}
             </Button>
           </DialogFooter>
         </DialogContent>
