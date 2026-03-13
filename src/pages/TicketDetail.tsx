@@ -591,8 +591,7 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   // ── Permission: original assignee OR any watcher can fully interact ───────────
   const isAssignee = currentUser?.id === ticket.assigned_to;
   const isWatcher = watchers.some(w => w.id === currentUser?.id);
-  const canReply = isAssignee || isWatcher;
-
+const canReply = true;
   // ── Tier2 escalated user label ────────────────────────────────────────────────
   const tier2User = ticket.escalated_to
     ? users.find(u => u.id === ticket.escalated_to)
