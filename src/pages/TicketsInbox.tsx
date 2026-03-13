@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, SlidersHorizontal, Check, Loader2, FileText,
- ChevronRight, MessageSquare
+  ChevronRight, MessageSquare, Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,17 +63,19 @@ interface Ticket {
   needs_response?: boolean;
   last_supplier_message_at?: string;
   latest_comment_preview?: string;
+  is_escalated?: boolean;
   created_at: string;
   updated_at?: string;
+  resolved_at?: string;
+  assigned_to?: string;
 }
 
 type SortType = 'needs-reply' | 'newest' | 'oldest' | 'longest-wait';
-type ViewType = 'all' | 'open' | 'mine' | 'resolved' | 'all_resolved';
+type ViewType = 'open' | 'mine' | 'watching' | 'resolved' | 'all_resolved' | 'all';
 
 const statusMap: Record<string, string> = {
   'All': 'All', 'Pending': 'new', 'In Progress': 'in_progress', 'Resolved': 'resolved'
 };
-
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,24 +96,26 @@ const needsReply = (t: Ticket) =>
 
 // ─── Sidebar Views ────────────────────────────────────────────────────────────
 
-const VIEWS: { id: ViewType; label: string }[] = [
-  { id: 'open', label: 'My Open Tickets' },
-  { id: 'mine', label: 'All Assigned' },
-  { id: 'resolved', label: 'Resolved Today' },
-  { id: 'all_resolved', label: 'All Resolved' },
-  { id: 'all', label: 'All Tickets Ever' },
+const VIEWS: { id: ViewType; label: string; icon?: React.ReactNode }[] = [
+  { id: 'open',        label: 'My Open Tickets' },
+  { id: 'mine',        label: 'All Assigned' },
+  { id: 'watching',    label: 'Watching' },
+  { id: 'resolved',    label: 'Resolved Today' },
+  { id: 'all_resolved',label: 'All Resolved' },
+  { id: 'all',         label: 'All Tickets Ever' },
 ];
 
 // ─── TicketCard ───────────────────────────────────────────────────────────────
 
 function TicketCard({
-  ticket, selected, active, onSelect, onClick,
+  ticket, selected, active, onSelect, onClick, isWatching,
 }: {
   ticket: Ticket;
   selected: boolean;
   active: boolean;
   onSelect: (id: string, checked: boolean) => void;
   onClick: (id: string) => void;
+  isWatching?: boolean;
 }) {
   const unread = needsReply(ticket);
 
@@ -141,6 +146,16 @@ function TicketCard({
             <span className={cn('text-sm text-primary', unread ? 'font-bold' : 'font-semibold')}>
               {ticket.ticket_number}
             </span>
+            {ticket.is_escalated && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-destructive/10 text-destructive border-destructive/20">
+                Escalated
+              </Badge>
+            )}
+            {isWatching && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800">
+                <Eye className="w-2.5 h-2.5 mr-0.5" />Watching
+              </Badge>
+            )}
           </div>
           <StatusBadge status={ticket.status as any} />
         </div>
@@ -161,10 +176,10 @@ function TicketCard({
 
         {/* Row 3: latest message preview */}
         <p className="text-xs text-muted-foreground mb-1.5 leading-relaxed">
-  {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 90)}
-</p>
+          {(ticket.latest_comment_preview || ticket.description || ticket.subject || '').slice(0, 90)}
+        </p>
 
-        {/* Row 4: meta + SLA + time */}
+        {/* Row 4: meta + time */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 flex-wrap">
             {ticket.issue_type && (
@@ -172,22 +187,39 @@ function TicketCard({
                 {ticket.issue_type.icon} {ticket.issue_type.name}
               </span>
             )}
+            {ticket.region?.name && (
+              <span className="text-xs text-muted-foreground">· {ticket.region.name}</span>
+            )}
           </div>
           <span className="text-xs text-muted-foreground">
-  {formatDistanceToNow(
-    new Date(ticket.last_supplier_message_at || ticket.created_at),
-    { addSuffix: true }
-  )}
-</span>
+            {formatDistanceToNow(
+              new Date(ticket.last_supplier_message_at || ticket.created_at),
+              { addSuffix: true }
+            )}
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
+// ─── Watching Group Header ─────────────────────────────────────────────────────
+
+function WatchingGroupHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="px-4 py-2 bg-secondary/50 border-b border-border sticky top-0 z-10">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {label} <span className="ml-1 font-normal normal-case">({count})</span>
+      </p>
+    </div>
+  );
+}
+
 // ─── Empty Detail Panel ───────────────────────────────────────────────────────
 
-function EmptyDetail({ selectedCount, onSendBulk, onClear }: { selectedCount: number; onSendBulk?: () => void; onClear?: () => void }) {
+function EmptyDetail({ selectedCount, onSendBulk, onClear }: {
+  selectedCount: number; onSendBulk?: () => void; onClear?: () => void;
+}) {
   if (selectedCount > 1) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background text-center px-8">
@@ -218,28 +250,28 @@ function EmptyDetail({ selectedCount, onSendBulk, onClear }: { selectedCount: nu
 
 export default function TicketsInbox() {
   const navigate = useNavigate();
-  const [selectedView, setSelectedView] = useState('my_open');
   const context = useOutletContext<any>();
   const activeView = context?.activeView;
   const setActiveView = context?.setActiveView;
 
-  // ── Data state ──────────────────────────────────────────────────────────────
+  // ── Data state ───────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [watchingTicketIds, setWatchingTicketIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [issueTypesList, setIssueTypesList] = useState<any[]>([]);
 
-  // ── UI state ────────────────────────────────────────────────────────────────
+  // ── UI state ─────────────────────────────────────────────────────────────────
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ViewType>('open');
   const [viewCounts, setViewCounts] = useState<Record<ViewType, number>>({
-  open: 0, mine: 0, resolved: 0, all_resolved: 0, all: 0,
-});
+    open: 0, mine: 0, watching: 0, resolved: 0, all_resolved: 0, all: 0,
+  });
 
-  // ── Filters ─────────────────────────────────────────────────────────────────
+  // ── Filters ──────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [topicFilter, setTopicFilter] = useState('All Topics');
@@ -250,15 +282,15 @@ export default function TicketsInbox() {
   const [dbSearchResults, setDbSearchResults] = useState<Ticket[]>([]);
   const [isDbSearching, setIsDbSearching] = useState(false);
 
-  // ── Selection ────────────────────────────────────────────────────────────────
+  // ── Selection ─────────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // ── Pagination ───────────────────────────────────────────────────────────────
+  // ── Pagination ────────────────────────────────────────────────────────────────
   const [displayCount, setDisplayCount] = useState(20);
   const [autoLoadCount, setAutoLoadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── Bulk dialogs ─────────────────────────────────────────────────────────────
+  // ── Bulk dialogs ──────────────────────────────────────────────────────────────
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
   const [reassignType, setReassignType] = useState<'team' | 'user' | null>(null);
   const [reassignTargetId, setReassignTargetId] = useState('');
@@ -272,40 +304,53 @@ export default function TicketsInbox() {
   const [newGroupName, setNewGroupName] = useState('');
   const [addingToGroup, setAddingToGroup] = useState(false);
 
-  // ── Init ─────────────────────────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────────
   useEffect(() => { fetchCurrentUser(); }, []);
 
   useEffect(() => {
-  if (!currentUser) return;
-  const channel = supabase
-    .channel('tickets-realtime')
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'tickets',
-    }, () => {
-      fetchTickets();
-    })
-    .subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, [currentUser, currentView]);
+    if (!currentUser) return;
+    const channel = supabase
+      .channel('tickets-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+        fetchTickets();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_watchers' }, () => {
+        fetchWatchingIds();
+        fetchTickets();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser, currentView]);
+
   useEffect(() => {
-    if (currentUser) { fetchTickets(); fetchTeamsAndUsers(); fetchGroups(); }
+    if (currentUser) {
+      fetchTickets();
+      fetchTeamsAndUsers();
+      fetchGroups();
+      fetchWatchingIds();
+    }
   }, [currentUser, currentView, statusFilter, topicFilter]);
 
-  useEffect(() => { setDisplayCount(20); setAutoLoadCount(0); }, [currentView, topicFilter, statusFilter, search, sortBy]);
-useEffect(() => {
-    if (activeView) setSelectedView(activeView);
+  useEffect(() => {
+    if (activeView) setCurrentView(activeView as ViewType);
   }, [activeView]);
 
-  
+  useEffect(() => {
+    setDisplayCount(20);
+    setAutoLoadCount(0);
+  }, [currentView, topicFilter, statusFilter, search, sortBy]);
+
   // ── Scroll auto-load ──────────────────────────────────────────────────────────
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const handler = () => {
       const { scrollTop, scrollHeight, clientHeight } = el;
-      if (scrollHeight - scrollTop - clientHeight < 120 && autoLoadCount < 2 && displayCount < filteredTickets.length) {
+      if (
+        scrollHeight - scrollTop - clientHeight < 120 &&
+        autoLoadCount < 2 &&
+        displayCount < filteredTickets.length
+      ) {
         setDisplayCount(p => p + 20);
         setAutoLoadCount(p => p + 1);
       }
@@ -326,10 +371,64 @@ useEffect(() => {
     }
   };
 
+  // ── Fetch watcher ticket IDs for current user ─────────────────────────────────
+  const fetchWatchingIds = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('ticket_watchers')
+        .select('ticket_id')
+        .eq('user_id', currentUser.id);
+      setWatchingTicketIds((data || []).map(w => w.ticket_id));
+    } catch (e) {
+      console.error('Error fetching watching ids:', e);
+    }
+  };
+
   // ── Fetch tickets ─────────────────────────────────────────────────────────────
   const fetchTickets = async () => {
+    if (!currentUser) return;
     try {
       setLoading(true);
+
+      // ── Watching view: fetch tickets user is watching (all statuses) ──────────
+      if (currentView === 'watching') {
+        // First get watching ticket IDs fresh
+        const { data: watcherRows } = await supabase
+          .from('ticket_watchers')
+          .select('ticket_id')
+          .eq('user_id', currentUser.id);
+
+        const ids = (watcherRows || []).map(w => w.ticket_id);
+        setWatchingTicketIds(ids);
+
+        if (ids.length === 0) {
+          setTickets([]);
+          setViewCounts(prev => ({ ...prev, watching: 0 }));
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('tickets')
+          .select(`
+            *,
+            issue_type:issue_types(id, name, icon),
+            assigned_user:profiles!assigned_to(full_name),
+            region:regions(name)
+          `)
+          .in('id', ids)
+          .order('needs_response', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setTickets(data || []);
+        setViewCounts(prev => ({ ...prev, watching: (data || []).length }));
+        setLoading(false);
+        return;
+      }
+
+      // ── All other views ───────────────────────────────────────────────────────
       let query = supabase
         .from('tickets')
         .select(`
@@ -345,17 +444,18 @@ useEffect(() => {
         query = query.eq('region_id', currentUser.region_id);
       }
 
-      // View filters
       if (currentView === 'open') {
-        query = query.eq('assigned_to', currentUser.id).not('status', 'in', '(resolved,closed)');
+        query = query
+          .eq('assigned_to', currentUser.id)
+          .not('status', 'in', '(resolved,closed)');
       } else if (currentView === 'mine') {
-        query = query.not('status', 'in', '(resolved,closed)').not('assigned_to', 'is', null);
-      } 
-      else if (currentView === 'resolved') {
+        query = query
+          .not('status', 'in', '(resolved,closed)')
+          .not('assigned_to', 'is', null);
+      } else if (currentView === 'resolved') {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         query = query.eq('status', 'resolved').gte('resolved_at', today.toISOString());
-      }
-      else if (currentView === 'all_resolved') {
+      } else if (currentView === 'all_resolved') {
         query = query.eq('status', 'resolved');
       }
 
@@ -363,20 +463,28 @@ useEffect(() => {
 
       const { data, error } = await query;
       if (error) throw error;
+
       setTickets(data || []);
 
-      // Compute view counts
+      // ── View counts (computed from non-watching data) ──────────────────────────
       const all = data || [];
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      setViewCounts({
-  open: all.filter(t => t.assigned_to === currentUser?.id && !['resolved'].includes(t.status)).length,
-  mine: all.filter(t => t.assigned_to && !['resolved'].includes(t.status)).length,
-  resolved: all.filter(t => t.status === 'resolved' && new Date(t.resolved_at) >= today).length,
-  all_resolved: all.filter(t => t.status === 'resolved').length,
-  all: all.length,
-}
 
-);
+      // Watching count from watchingTicketIds state (already fetched separately)
+      const { data: watcherRows } = await supabase
+        .from('ticket_watchers')
+        .select('ticket_id')
+        .eq('user_id', currentUser.id);
+      const watchingCount = (watcherRows || []).length;
+
+      setViewCounts({
+        open: all.filter(t => t.assigned_to === currentUser?.id && !['resolved', 'closed'].includes(t.status)).length,
+        mine: all.filter(t => t.assigned_to && !['resolved', 'closed'].includes(t.status)).length,
+        watching: watchingCount,
+        resolved: all.filter(t => t.status === 'resolved' && t.resolved_at && new Date(t.resolved_at) >= today).length,
+        all_resolved: all.filter(t => t.status === 'resolved').length,
+        all: all.length,
+      });
     } catch (error) {
       console.error('Error fetching tickets:', error);
       toast({ title: 'Error loading tickets', variant: 'destructive' });
@@ -452,6 +560,13 @@ useEffect(() => {
     }
     return sortFn(list);
   })();
+
+  // ── Watching view grouped by status ──────────────────────────────────────────
+  const watchingGroups = currentView === 'watching' ? (() => {
+    const active = filteredTickets.filter(t => !['resolved', 'closed'].includes(t.status));
+    const resolved = filteredTickets.filter(t => ['resolved', 'closed'].includes(t.status));
+    return { active, resolved };
+  })() : null;
 
   const displayedTickets = filteredTickets.slice(0, displayCount);
   const hasMore = displayCount < filteredTickets.length;
@@ -533,6 +648,102 @@ useEffect(() => {
     finally { setAddingToGroup(false); }
   };
 
+  // ── Render ticket list (normal vs watching grouped) ────────────────────────────
+  const renderTicketList = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    if (filteredTickets.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-48 text-center px-6">
+          <FileText className="h-10 w-10 text-muted-foreground mb-3" />
+          <p className="font-medium text-foreground">
+            {currentView === 'watching' ? 'No watched tickets' : 'No tickets found'}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {currentView === 'watching'
+              ? 'Tickets escalated to you will appear here'
+              : 'Try adjusting your filters'}
+          </p>
+        </div>
+      );
+    }
+
+    // Watching view: show grouped by active / resolved
+    if (currentView === 'watching' && watchingGroups) {
+      return (
+        <>
+          {watchingGroups.active.length > 0 && (
+            <>
+              <WatchingGroupHeader label="Active" count={watchingGroups.active.length} />
+              {watchingGroups.active.map(ticket => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  selected={selectedIds.includes(ticket.id)}
+                  active={selectedTicketId === ticket.id}
+                  onSelect={handleSelectOne}
+                  onClick={id => setSelectedTicketId(id)}
+                  isWatching
+                />
+              ))}
+            </>
+          )}
+          {watchingGroups.resolved.length > 0 && (
+            <>
+              <WatchingGroupHeader label="Resolved" count={watchingGroups.resolved.length} />
+              {watchingGroups.resolved.map(ticket => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  selected={selectedIds.includes(ticket.id)}
+                  active={selectedTicketId === ticket.id}
+                  onSelect={handleSelectOne}
+                  onClick={id => setSelectedTicketId(id)}
+                  isWatching
+                />
+              ))}
+            </>
+          )}
+        </>
+      );
+    }
+
+    // Normal paginated list
+    return (
+      <>
+        {displayedTickets.map(ticket => (
+          <TicketCard
+            key={ticket.id}
+            ticket={ticket}
+            selected={selectedIds.includes(ticket.id)}
+            active={selectedTicketId === ticket.id}
+            onSelect={handleSelectOne}
+            onClick={id => setSelectedTicketId(id)}
+            isWatching={watchingTicketIds.includes(ticket.id)}
+          />
+        ))}
+        {hasMore && autoLoadCount < 2 && (
+          <div className="py-4 flex justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        {hasMore && autoLoadCount >= 2 && (
+          <div className="py-4 flex justify-center">
+            <button onClick={() => setDisplayCount(p => p + 20)} className="text-sm text-primary hover:underline">
+              Load 20 more ({filteredTickets.length - displayCount} remaining)
+            </button>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
 
@@ -545,7 +756,7 @@ useEffect(() => {
           {VIEWS.map(view => (
             <button
               key={view.id}
-              onClick={() => { setCurrentView(view.id); setSelectedTicketId(null); }}
+              onClick={() => { setCurrentView(view.id); setSelectedTicketId(null); setSearch(''); }}
               className={cn(
                 'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all',
                 currentView === view.id
@@ -553,11 +764,20 @@ useEffect(() => {
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
               )}
             >
-              <span>{view.label}</span>
+              <div className="flex items-center gap-2">
+                {view.id === 'watching' && (
+                  <Eye className="w-3.5 h-3.5 flex-shrink-0" />
+                )}
+                <span>{view.label}</span>
+              </div>
               {viewCounts[view.id] > 0 && (
                 <span className={cn(
                   'px-2 py-0.5 text-xs font-medium rounded-full',
-                  currentView === view.id ? 'bg-primary/20 text-primary' : 'bg-secondary text-muted-foreground'
+                  currentView === view.id
+                    ? 'bg-primary/20 text-primary'
+                    : view.id === 'watching'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      : 'bg-secondary text-muted-foreground'
                 )}>
                   {viewCounts[view.id]}
                 </span>
@@ -572,7 +792,16 @@ useEffect(() => {
         {/* List Header */}
         <div className="p-4 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-foreground">Tickets</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-foreground">
+                {currentView === 'watching' ? 'Watching' : 'Tickets'}
+              </h2>
+              {currentView === 'watching' && (
+                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800">
+                  <Eye className="w-3 h-3 mr-1" /> Tier 2
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-8 w-8"
                 onClick={() => { setSearchOpen(p => !p); setTimeout(() => searchInputRef.current?.focus(), 100); }}>
@@ -606,26 +835,38 @@ useEffect(() => {
             />
           )}
 
-          <div className="flex gap-2 mb-3">
-            <select
-              value={topicFilter}
-              onChange={e => setTopicFilter(e.target.value)}
-              className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
-            >
-              <option>All Topics</option>
-              {issueTypesList.map(t => <option key={t.id} value={t.name}>{t.icon} {t.name}</option>)}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
-            >
-              <option>All</option>
-                    <option>Pending</option>
-                    <option>In Progress</option>
-                  <option>Resolved</option>
-            </select>
-          </div>
+          {/* Topic + Status filters — hidden in watching view (all statuses shown) */}
+          {currentView !== 'watching' && (
+            <div className="flex gap-2 mb-3">
+              <select
+                value={topicFilter}
+                onChange={e => setTopicFilter(e.target.value)}
+                className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
+              >
+                <option>All Topics</option>
+                {issueTypesList.map(t => <option key={t.id} value={t.name}>{t.icon} {t.name}</option>)}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
+              >
+                <option>All</option>
+                <option>Pending</option>
+                <option>In Progress</option>
+                <option>Resolved</option>
+              </select>
+            </div>
+          )}
+
+          {/* Watching view info bar */}
+          {currentView === 'watching' && (
+            <div className="mb-3 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-xs text-amber-800 dark:text-amber-400">
+                Tickets escalated to you. You can reply and manage these just like your own tickets.
+              </p>
+            </div>
+          )}
 
           {/* Bulk select */}
           <div className="space-y-2 pt-2 border-t border-border">
@@ -640,56 +881,23 @@ useEffect(() => {
               <option value="-1">Select All ({filteredTickets.length})</option>
             </select>
             {selectedIds.length > 0 && (
-              <p className="text-xs text-muted-foreground">{selectedIds.length} ticket{selectedIds.length !== 1 ? 's' : ''} selected</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedIds.length} ticket{selectedIds.length !== 1 ? 's' : ''} selected
+              </p>
             )}
           </div>
 
           <div className="flex justify-between items-center mt-2">
             <p className="text-xs text-muted-foreground">Sorted by: {getSortLabel(sortBy)}</p>
             <p className="text-xs text-muted-foreground">
-              {isDbSearching ? 'Searching...' : `${displayedTickets.length} of ${filteredTickets.length}`}
+              {isDbSearching ? 'Searching...' : `${filteredTickets.length} ticket${filteredTickets.length !== 1 ? 's' : ''}`}
             </p>
           </div>
         </div>
 
         {/* List */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredTickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-              <FileText className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="font-medium text-foreground">No tickets found</p>
-              <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
-            </div>
-          ) : (
-            <>
-              {displayedTickets.map(ticket => (
-                <TicketCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  selected={selectedIds.includes(ticket.id)}
-                  active={selectedTicketId === ticket.id}
-                  onSelect={handleSelectOne}
-                  onClick={id => setSelectedTicketId(id)}
-                />
-              ))}
-              {hasMore && autoLoadCount < 2 && (
-                <div className="py-4 flex justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              )}
-              {hasMore && autoLoadCount >= 2 && (
-                <div className="py-4 flex justify-center">
-                  <button onClick={() => setDisplayCount(p => p + 20)} className="text-sm text-primary hover:underline">
-                    Load 20 more ({filteredTickets.length - displayCount} remaining)
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+          {renderTicketList()}
         </div>
       </div>
 
@@ -703,11 +911,12 @@ useEffect(() => {
             embedded
           />
         ) : (
-<EmptyDetail 
-  selectedCount={selectedIds.length} 
-  onSendBulk={() => { setResponseText(''); setResponseIsInternal(false); setResponseDialogOpen(true); }}
-  onClear={() => setSelectedIds([])}
-/>        )}
+          <EmptyDetail
+            selectedCount={selectedIds.length}
+            onSendBulk={() => { setResponseText(''); setResponseIsInternal(false); setResponseDialogOpen(true); }}
+            onClear={() => setSelectedIds([])}
+          />
+        )}
       </div>
 
       {/* ── Bulk Reassign Dialog ───────────────────────────────────────────── */}

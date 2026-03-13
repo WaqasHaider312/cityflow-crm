@@ -227,13 +227,12 @@ export function Sidebar({ onViewChange }: SidebarProps) {
       const watchingTicketIds = (watchRows || []).map(r => r.ticket_id);
       let watchingCount = 0;
       if (watchingTicketIds.length > 0) {
-        const { count } = await supabase
-          .from('tickets')
-          .select('*', { count: 'exact', head: true })
-          .in('id', watchingTicketIds)
-          .neq('assigned_to', userId)
-          .not('status', 'in', '(resolved,closed)');
-        watchingCount = count || 0;
+        // AFTER
+const { count } = await supabase
+  .from('tickets')
+  .select('*', { count: 'exact', head: true })
+  .in('id', watchingTicketIds)
+  .not('status', 'in', '(resolved,closed)');
       }
 
       const { count: groups } = await supabase

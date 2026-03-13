@@ -57,6 +57,7 @@ interface Ticket {
   supplier_id?: string;
   city?: string;
   issue_type?: { name: string; icon: string };
+  issue_type_id?: string;
   assigned_user?: { id: string; full_name: string };
   team?: { name: string };
   tier2_team?: { name: string };
@@ -64,6 +65,8 @@ interface Ticket {
   sla_due_at?: string;
   sla_status?: string;
   is_escalated?: boolean;
+  escalated_to?: string;
+  tier2_team_id?: string;
   manager_intervened?: boolean;
   created_at: string;
   assigned_to?: string;
@@ -244,10 +247,11 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
   const [escalationNote, setEscalationNote] = useState('');
+  const [escalateTier2UserId, setEscalateTier2UserId] = useState('');
   const [watchers, setWatchers] = useState<any[]>([]);
   const [cannedQuery, setCannedQuery] = useState<string | null>(null);
 
-  // ── Keyboard shortcuts (ref trick avoids "used before declaration" TS error) ──
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────────
   useKeyboardShortcuts({
     onSendMessage: () => addCommentRef.current(),
     onCloseTicket: onClose,
@@ -333,15 +337,12 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
       setTicketAttachments(ticketAttachmentsData || []);
       setCommentAttachments(commentAttachmentsMap);
 
-      if (ticketData?.ticket_group_id) {
-        const { data: watchersData } = await supabase
-          .from('ticket_watchers')
-          .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
-          .eq('ticket_group_id', ticketData.ticket_group_id);
-        setWatchers((watchersData || []).map((w: any) => w.user).filter(Boolean));
-      } else {
-        setWatchers([]);
-      }
+      // ── Fetch watchers by ticket_id (not just ticket_group_id) ────────────────
+      const { data: watchersData } = await supabase
+        .from('ticket_watchers')
+        .select('user:profiles!ticket_watchers_user_id_fkey(id, full_name)')
+        .eq('ticket_id', ticketId);
+      setWatchers((watchersData || []).map((w: any) => w.user).filter(Boolean));
 
       if (ticketData?.supplier_id) fetchSupplierStats(ticketData.supplier_id);
     } catch (error) {
@@ -350,12 +351,6 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleEscalateToWatcher = async (watcherId: string) => {
-    await supabase.from('tickets').update({ assigned_to: watcherId }).eq('id', ticketId);
-    toast({ title: 'Ticket assigned to watcher' });
-    fetchTicketData(); onRefresh?.();
   };
 
   const fetchSupplierStats = async (supplierId: string) => {
@@ -439,7 +434,6 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
     }
   };
 
-  // Wire ref AFTER handleAddComment is declared
   addCommentRef.current = handleAddComment;
 
   const handleResolve = async () => {
@@ -460,17 +454,92 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
     } catch { toast({ title: 'Error reassigning ticket', variant: 'destructive' }); }
   };
 
+  // ── Open escalate dialog — auto-pull tier2 from routing rule ─────────────────
+  const handleOpenEscalateDialog = async () => {
+    if (!ticket) return;
+
+    // Look up matching routing rule for this ticket's issue_type + region
+    let suggestedTier2 = '';
+    try {
+      const { data: routingRule } = await supabase
+        .from('routing_rules')
+        .select('tier2_user_id')
+        .eq('issue_type_id', ticket.issue_type_id || '')
+        .eq('region_id', ticket.region_id || '')
+        .eq('is_active', true)
+        .order('priority_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (routingRule?.tier2_user_id) {
+        suggestedTier2 = routingRule.tier2_user_id;
+      } else {
+        // Fallback: match by region only
+        const { data: fallbackRule } = await supabase
+          .from('routing_rules')
+          .select('tier2_user_id')
+          .eq('region_id', ticket.region_id || '')
+          .eq('is_active', true)
+          .order('priority_order', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (fallbackRule?.tier2_user_id) suggestedTier2 = fallbackRule.tier2_user_id;
+      }
+    } catch (e) {
+      console.error('Error fetching routing rule for escalation:', e);
+    }
+
+    setEscalateTier2UserId(suggestedTier2);
+    setEscalationNote('');
+    setEscalateDialogOpen(true);
+  };
+
+  // ── Confirm escalation ────────────────────────────────────────────────────────
   const handleEscalate = async () => {
+    if (!escalateTier2UserId) {
+      toast({ title: 'Please select a Tier 2 watcher', variant: 'destructive' });
+      return;
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('tickets').update({ is_escalated: true, escalated_at: new Date().toISOString() }).eq('id', ticketId);
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Update ticket with escalation info
+      await supabase.from('tickets').update({
+        is_escalated: true,
+        escalated_at: new Date().toISOString(),
+        escalated_to: escalateTier2UserId,
+      }).eq('id', ticketId);
+
+      // 2. Insert tier2 user into ticket_watchers (upsert to avoid duplicates)
+      await supabase.from('ticket_watchers').upsert({
+        ticket_id: ticketId,
+        user_id: escalateTier2UserId,
+        added_at: new Date().toISOString(),
+        ticket_group_id: ticket?.ticket_group_id || null,
+      }, { onConflict: 'ticket_id,user_id' });
+
+      // 3. Add internal escalation note
       if (escalationNote.trim()) {
-        await supabase.from('comments').insert({ ticket_id: ticketId, user_id: user?.id, content: `[ESCALATED] ${escalationNote}`, is_internal: true, comment_source: 'agent' });
+        await supabase.from('comments').insert({
+          ticket_id: ticketId,
+          user_id: user.id,
+          content: `[ESCALATED] ${escalationNote}`,
+          is_internal: true,
+          comment_source: 'agent',
+        });
       }
-      toast({ title: 'Ticket Escalated' });
-      setEscalateDialogOpen(false); setEscalationNote('');
-      fetchTicketData(); onRefresh?.();
-    } catch { toast({ title: 'Error escalating ticket', variant: 'destructive' }); }
+
+      toast({ title: 'Ticket Escalated', description: 'Tier 2 watcher has been notified.' });
+      setEscalateDialogOpen(false);
+      setEscalationNote('');
+      setEscalateTier2UserId('');
+      fetchTicketData();
+      onRefresh?.();
+    } catch (err) {
+      console.error('Escalation error:', err);
+      toast({ title: 'Error escalating ticket', variant: 'destructive' });
+    }
   };
 
   const handleViewAttachment = (attachment: Attachment) => {
@@ -518,7 +587,16 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   }
 
   const isManager = currentUser?.region_id === ticket.region_id;
-  const canReply = true;
+
+  // ── Permission: original assignee OR any watcher can fully interact ───────────
+  const isAssignee = currentUser?.id === ticket.assigned_to;
+  const isWatcher = watchers.some(w => w.id === currentUser?.id);
+  const canReply = isAssignee || isWatcher;
+
+  // ── Tier2 escalated user label ────────────────────────────────────────────────
+  const tier2User = ticket.escalated_to
+    ? users.find(u => u.id === ticket.escalated_to)
+    : null;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -542,7 +620,8 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
             <Badge variant="outline" className="text-xs">{ticket.issue_type?.icon} {ticket.issue_type?.name}</Badge>
             {ticket.is_escalated && (
               <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
-                <ArrowUpRight className="w-3 h-3 mr-1" /> Escalated
+                <ArrowUpRight className="w-3 h-3 mr-1" />
+                Escalated{tier2User ? ` → ${tier2User.full_name}` : ''}
               </Badge>
             )}
             <Button variant="ghost" size="sm" className="text-xs text-primary h-7" onClick={loadAllSupplierTickets}>
@@ -769,6 +848,15 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
             </div>
           </div>
         )}
+
+        {/* Read-only notice for non-assignee/non-watcher */}
+        {!canReply && (
+          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex-shrink-0">
+            <p className="text-xs text-muted-foreground text-center">
+              You are viewing this ticket in read-only mode.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Right: Info Panel ────────────────────────────────────────────── */}
@@ -863,27 +951,43 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
               </Select>
             </div>
           </div>
-          {ticket.status === 'resolved' || ticket.status === 'closed' ? (
-            <Button className="w-full" size="sm" onClick={async () => {
-              await supabase.from('tickets').update({ status: 'new' }).eq('id', ticketId);
-              fetchTicketData(); onRefresh?.();
-            }}>↻ Reopen Ticket</Button>
-          ) : (
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={handleResolve}>
-              ✓ Mark Resolved
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {ticket.status === 'resolved' || ticket.status === 'closed' ? (
+              <Button className="flex-1" size="sm" onClick={async () => {
+                await supabase.from('tickets').update({ status: 'new' }).eq('id', ticketId);
+                fetchTicketData(); onRefresh?.();
+              }}>↻ Reopen</Button>
+            ) : (
+              <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={handleResolve}>
+                ✓ Resolved
+              </Button>
+            )}
+            {!ticket.is_escalated && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={handleOpenEscalateDialog}
+              >
+                <ArrowUpRight className="w-3.5 h-3.5 mr-1" /> Escalate
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Assignment Info */}
         <div className="p-4 border-b border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assignment</p>
           <div className="space-y-2 text-sm">
+            {/* Tier 1 Assignee */}
             <div className="flex items-center gap-2">
               <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
                 {getInitials(ticket.assigned_user?.full_name)}
               </div>
-              <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
+              <div>
+                <span className="text-foreground font-medium">{ticket.assigned_user?.full_name || 'Unassigned'}</span>
+                <span className="text-xs text-muted-foreground ml-1">Tier 1</span>
+              </div>
             </div>
             {ticket.team?.name && <p className="text-xs text-muted-foreground">Team: {ticket.team.name}</p>}
             {ticket.region?.name && (
@@ -891,21 +995,36 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
                 {ticket.region.name}
               </Badge>
             )}
+
+            {/* Tier 2 Watcher (shown when escalated) */}
+            {ticket.is_escalated && tier2User && (
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1.5">Tier 2 Watcher</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-destructive/10 flex items-center justify-center text-xs font-medium text-destructive">
+                    {getInitials(tier2User.full_name)}
+                  </div>
+                  <div>
+                    <span className="text-xs text-foreground font-medium">{tier2User.full_name}</span>
+                    <Badge variant="outline" className="ml-1.5 text-[10px] bg-destructive/10 text-destructive border-destructive/20">
+                      Escalated
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* All watchers */}
             {watchers.length > 0 && (
               <div className="pt-2 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-1.5">Watchers</p>
+                <p className="text-xs text-muted-foreground mb-1.5">Watching ({watchers.length})</p>
                 <div className="space-y-1.5">
                   {watchers.map((w: any) => (
-                    <div key={w.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
-                          {getInitials(w.full_name)}
-                        </div>
-                        <span className="text-xs text-foreground">{w.full_name}</span>
+                    <div key={w.id} className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
+                        {getInitials(w.full_name)}
                       </div>
-                      <button onClick={() => handleEscalateToWatcher(w.id)} className="text-xs text-primary hover:underline">
-                        Escalate
-                      </button>
+                      <span className="text-xs text-foreground">{w.full_name}</span>
                     </div>
                   ))}
                 </div>
@@ -1016,12 +1135,45 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Escalate Ticket</DialogTitle>
-            <DialogDescription>Add a note explaining why this ticket is being escalated.</DialogDescription>
+            <DialogDescription>
+              The Tier 2 watcher has been auto-selected from the routing rule. You can override if needed.
+            </DialogDescription>
           </DialogHeader>
-          <Textarea placeholder="Add escalation note..." rows={3} value={escalationNote} onChange={e => setEscalationNote(e.target.value)} />
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Tier 2 Watcher</label>
+              <Select value={escalateTier2UserId} onValueChange={setEscalateTier2UserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Tier 2 watcher" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {users.map(u => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.full_name} {u.team?.name ? `(${u.team.name})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Escalation Note (optional)</label>
+              <Textarea
+                placeholder="Why is this ticket being escalated?"
+                rows={3}
+                value={escalationNote}
+                onChange={e => setEscalationNote(e.target.value)}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleEscalate}>Escalate</Button>
+            <Button
+              onClick={handleEscalate}
+              disabled={!escalateTier2UserId}
+              className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              <ArrowUpRight className="w-4 h-4 mr-1.5" /> Escalate
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
