@@ -271,8 +271,7 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      setCurrentUser(profile);
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
 
       const { data: ticketData, error: ticketError } = await supabase
         .from('tickets')
@@ -285,8 +284,9 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
           region:regions(id, name, manager:profiles!regions_manager_id_fkey(full_name))
         `)
         .eq('id', ticketId)
-        .single();
+        .maybeSingle()
       if (ticketError) throw ticketError;
+      if (!ticketData) { setLoading(false); return; }
 
       const { data: commentsData } = await supabase
         .from('comments')
