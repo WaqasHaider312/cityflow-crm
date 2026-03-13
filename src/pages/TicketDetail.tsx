@@ -244,6 +244,12 @@ export default function TicketDetail({ ticketId, embedded = false, onClose, onRe
   const [escalationNote, setEscalationNote] = useState('');
   const [watchers, setWatchers] = useState<any[]>([]);
 
+  
+useEffect(() => {
+  if (ticketId) fetchTicketData();
+}, [ticketId]);
+
+
   useEffect(() => {
   if (!ticketId) return;
   const channel = supabase
