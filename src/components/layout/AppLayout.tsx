@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 
 export function AppLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
-  const [activeView, setActiveView] = useState<string | undefined>(undefined);
-
-  const isTicketsPage = location.pathname === '/tickets';
 
   useEffect(() => {
     const checkSession = async () => {
@@ -35,19 +30,8 @@ export function AppLayout() {
   }
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
-      <Sidebar onViewChange={setActiveView} />
-      <main className="flex-1 overflow-hidden">
-        {isTicketsPage ? (
-          <div className="h-full animate-fade-in">
-            <Outlet context={{ activeView, setActiveView }} />
-          </div>
-        ) : (
-          <div className="p-6 overflow-auto h-full animate-fade-in">
-            <Outlet />
-          </div>
-        )}
-      </main>
+    <div className="h-screen bg-background overflow-hidden animate-fade-in">
+      <Outlet />
     </div>
   );
 }
