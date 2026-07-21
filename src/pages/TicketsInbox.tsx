@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut
+  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,11 @@ type ViewType = 'open' | 'unassigned' | 'mine' | 'all';
 const statusMap: Record<string, string> = {
   'All': 'All', 'Pending': 'new', 'In Progress': 'in_progress', 'Resolved': 'resolved'
 };
+
+// Shared styling for the compact filter dropdowns
+const FILTER_SELECT =
+  'w-full min-w-0 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none cursor-pointer truncate';
+const FILTER_ACTIVE = 'border-primary/60 bg-primary/5 text-primary font-medium';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -236,8 +241,8 @@ export default function TicketsInbox() {
 
   // ── Filters ──────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [topicFilter, setTopicFilter] = useState('All Topics');
+  const [cityFilter, setCityFilter] = useState('All Cities');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState<SortType>('needs-reply');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -283,7 +288,7 @@ export default function TicketsInbox() {
   useEffect(() => {
     setDisplayCount(20);
     setAutoLoadCount(0);
-  }, [currentView, topicFilter, statusFilter, search, sortBy]);
+  }, [currentView, topicFilter, cityFilter, statusFilter, search, sortBy]);
 
   // ── Scroll auto-load ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -417,13 +422,36 @@ export default function TicketsInbox() {
     searchTimeoutRef.current = setTimeout(() => searchDatabase(value), 400);
   };
 
+  // ── City filter options — derived from the tickets actually loaded ────────────
+  // (tickets carry a free-text `city`, so every option here is guaranteed to
+  //  match real tickets, unlike pulling from a separate cities table.)
+  const cityOptions = (() => {
+    const base = search.trim() ? dbSearchResults : tickets;
+    const set = new Set<string>();
+    base.forEach(t => { const c = (t.city || '').trim(); if (c) set.add(c); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  })();
+
+  const filtersActive =
+    topicFilter !== 'All Topics' || cityFilter !== 'All Cities' || statusFilter !== 'All';
+
+  const clearFilters = () => {
+    setTopicFilter('All Topics');
+    setCityFilter('All Cities');
+    setStatusFilter('All');
+    setSearch('');
+    setDbSearchResults([]);
+  };
+
   // ── Filter + sort ─────────────────────────────────────────────────────────────
   const filteredTickets = (() => {
-    let list = search.trim() ? dbSearchResults : [...tickets];
+    let list = search.trim() ? [...dbSearchResults] : [...tickets];
 
-    if (!search.trim() && topicFilter !== 'All Topics') {
-      list = list.filter(t => t.issue_type?.name === topicFilter);
-    }
+    // Topic / city / status apply whether or not we're searching, so the two
+    // never silently disagree.
+    if (topicFilter !== 'All Topics') list = list.filter(t => t.issue_type?.name === topicFilter);
+    if (cityFilter !== 'All Cities') list = list.filter(t => (t.city || '').trim() === cityFilter);
+    if (statusFilter !== 'All') list = list.filter(t => t.status === statusMap[statusFilter]);
 
     const sortFn = (arr: Ticket[]) => {
       if (sortBy === 'oldest' || sortBy === 'longest-wait')
@@ -490,17 +518,29 @@ export default function TicketsInbox() {
     }
 
     if (filteredTickets.length === 0) {
+      const hasQuery = filtersActive || !!search.trim();
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center px-6">
           <FileText className="h-10 w-10 text-muted-foreground mb-3" />
           <p className="font-medium text-foreground">
-            {currentView === 'unassigned' ? 'Nothing waiting to be picked up' : 'No tickets found'}
+            {hasQuery
+              ? 'No tickets match your filters'
+              : currentView === 'unassigned'
+                ? 'Nothing waiting to be picked up'
+                : 'No tickets found'}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            {currentView === 'unassigned'
-              ? 'New tickets with no owner will appear here'
-              : 'Try adjusting your filters'}
+            {hasQuery
+              ? 'Try widening your search or clearing filters'
+              : currentView === 'unassigned'
+                ? 'New tickets with no owner will appear here'
+                : 'Tickets in this view will appear here'}
           </p>
+          {hasQuery && (
+            <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <X className="h-3.5 w-3.5" /> Clear filters
+            </button>
+          )}
         </div>
       );
     }
@@ -551,7 +591,7 @@ export default function TicketsInbox() {
           {VIEWS.map(view => (
             <button
               key={view.id}
-              onClick={() => { setCurrentView(view.id); setSelectedTicketId(null); setSearch(''); }}
+              onClick={() => { setCurrentView(view.id); setSelectedTicketId(null); clearFilters(); }}
               className={cn(
                 'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all',
                 currentView === view.id
@@ -604,63 +644,86 @@ export default function TicketsInbox() {
         {/* List Header */}
         <div className="p-4 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-foreground">
-              {VIEWS.find(v => v.id === currentView)?.label ?? 'Tickets'}
-            </h2>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8"
-                onClick={() => { setSearchOpen(p => !p); setTimeout(() => searchInputRef.current?.focus(), 100); }}>
-                <Search className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <SlidersHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-popover">
-                  {(['needs-reply', 'newest', 'oldest', 'longest-wait'] as SortType[]).map(s => (
-                    <DropdownMenuItem key={s} onClick={() => setSortBy(s)} className="flex items-center justify-between cursor-pointer">
-                      <span>{getSortLabel(s)}</span>
-                      {sortBy === s && <Check className="h-4 w-4" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-lg font-bold text-foreground truncate">
+                {VIEWS.find(v => v.id === currentView)?.label ?? 'Tickets'}
+              </h2>
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-secondary text-muted-foreground flex-shrink-0">
+                {isDbSearching ? '…' : filteredTickets.length}
+              </span>
             </div>
+            {/* Sort */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs text-muted-foreground">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  {getSortLabel(sortBy)}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-popover">
+                {(['needs-reply', 'newest', 'oldest', 'longest-wait'] as SortType[]).map(s => (
+                  <DropdownMenuItem key={s} onClick={() => setSortBy(s)} className="flex items-center justify-between cursor-pointer">
+                    <span>{getSortLabel(s)}</span>
+                    {sortBy === s && <Check className="h-4 w-4" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          {searchOpen && (
+          {/* Search */}
+          <div className="relative mb-2.5">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               ref={searchInputRef}
-              placeholder="Search tickets..."
+              placeholder="Search number, supplier, subject, phone…"
               value={search}
               onChange={e => handleSearchChange(e.target.value)}
-              className="mb-3 bg-card h-9"
+              className="pl-9 bg-card h-9"
             />
-          )}
+          </div>
 
-          {/* Topic + Status filters */}
-          <div className="flex gap-2 mb-3">
+          {/* Filters: Issue Type · City · Status */}
+          <div className="grid grid-cols-3 gap-2">
             <select
               value={topicFilter}
               onChange={e => setTopicFilter(e.target.value)}
-              className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
+              title="Filter by issue type"
+              className={cn(FILTER_SELECT, topicFilter !== 'All Topics' && FILTER_ACTIVE)}
             >
-              <option>All Topics</option>
+              <option value="All Topics">All Issues</option>
               {issueTypesList.map(t => <option key={t.id} value={t.name}>{t.icon} {t.name}</option>)}
+            </select>
+            <select
+              value={cityFilter}
+              onChange={e => setCityFilter(e.target.value)}
+              title="Filter by city"
+              className={cn(FILTER_SELECT, cityFilter !== 'All Cities' && FILTER_ACTIVE)}
+            >
+              <option value="All Cities">All Cities</option>
+              {cityOptions.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground focus:border-primary outline-none"
+              title="Filter by status"
+              className={cn(FILTER_SELECT, statusFilter !== 'All' && FILTER_ACTIVE)}
             >
-              <option>All</option>
-              <option>Pending</option>
-              <option>In Progress</option>
-              <option>Resolved</option>
+              <option value="All">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
             </select>
           </div>
+
+          {(filtersActive || search.trim()) && (
+            <button
+              onClick={clearFilters}
+              className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <X className="h-3 w-3" /> Clear filters
+            </button>
+          )}
 
           {/* Bulk select */}
           <div className="space-y-2 pt-2 border-t border-border">
@@ -679,13 +742,6 @@ export default function TicketsInbox() {
                 {selectedIds.length} ticket{selectedIds.length !== 1 ? 's' : ''} selected
               </p>
             )}
-          </div>
-
-          <div className="flex justify-between items-center mt-2">
-            <p className="text-xs text-muted-foreground">Sorted by: {getSortLabel(sortBy)}</p>
-            <p className="text-xs text-muted-foreground">
-              {isDbSearching ? 'Searching...' : `${filteredTickets.length} ticket${filteredTickets.length !== 1 ? 's' : ''}`}
-            </p>
           </div>
         </div>
 
