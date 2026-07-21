@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X, Megaphone
+  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X, Megaphone, Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import TicketDetail from './TicketDetail';
+import { NewTicketDialog } from '@/components/tickets/NewTicketDialog';
 import { useNavigate } from 'react-router-dom';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -253,6 +254,9 @@ export default function TicketsInbox() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const [dbSearchResults, setDbSearchResults] = useState<Ticket[]>([]);
   const [isDbSearching, setIsDbSearching] = useState(false);
+
+  // ── New ticket (agent-initiated) ────────────────────────────────────────────
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
 
   // ── Selection ─────────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -589,6 +593,14 @@ export default function TicketsInbox() {
             <span className="text-xs text-muted-foreground">Tickets</span>
           </div>
         </div>
+
+        {/* Open a ticket with a supplier (agent-initiated) */}
+        <div className="px-3 pt-3">
+          <Button onClick={() => setNewTicketOpen(true)} size="sm" className="w-full justify-center gap-1.5">
+            <Plus className="w-4 h-4" /> New Ticket
+          </Button>
+        </div>
+
         <nav className="flex-1 p-2 space-y-0.5">
           {VIEWS.map(view => (
             <button
@@ -814,6 +826,19 @@ export default function TicketsInbox() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── New Ticket (agent-initiated) ────────────────────────────────────── */}
+      <NewTicketDialog
+        open={newTicketOpen}
+        onOpenChange={setNewTicketOpen}
+        issueTypes={issueTypesList}
+        onCreated={(id) => {
+          setNewTicketOpen(false);
+          setCurrentView('open');
+          setSelectedTicketId(id);
+          fetchTickets();
+        }}
+      />
 
     </div>
   );
