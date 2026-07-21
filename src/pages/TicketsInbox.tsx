@@ -60,7 +60,7 @@ interface Ticket {
   assigned_to?: string;
 }
 
-type SortType = 'needs-reply' | 'newest' | 'oldest' | 'longest-wait';
+type SortType = 'newest' | 'oldest' | 'needs-reply';
 type ViewType = 'open' | 'unassigned' | 'mine' | 'all';
 
 const statusMap: Record<string, string> = {
@@ -78,16 +78,20 @@ const getInitials = (name?: string) =>
   (name || 'UN').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
 const getSortLabel = (sort: SortType) => ({
-  'needs-reply': 'Needs Reply First',
-  'newest': 'Newest First',
-  'oldest': 'Oldest First',
-  'longest-wait': 'Longest Wait',
+  'newest': 'Newest first',
+  'oldest': 'Oldest first',
+  'needs-reply': 'Needs reply first',
 }[sort]);
 
 const needsReply = (t: Ticket) =>
   t.needs_response === true &&
   t.status !== 'resolved' &&
   t.status !== 'closed';
+
+// The single timestamp everything sorts by — the same one each card shows,
+// so the visible order always matches the visible times.
+const activityTime = (t: Ticket) =>
+  new Date(t.last_supplier_message_at || t.created_at).getTime();
 
 // ─── Sidebar Views ────────────────────────────────────────────────────────────
 
@@ -244,7 +248,7 @@ export default function TicketsInbox() {
   const [topicFilter, setTopicFilter] = useState('All Topics');
   const [cityFilter, setCityFilter] = useState('All Cities');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [sortBy, setSortBy] = useState<SortType>('needs-reply');
+  const [sortBy, setSortBy] = useState<SortType>('newest');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const [dbSearchResults, setDbSearchResults] = useState<Ticket[]>([]);
@@ -453,18 +457,16 @@ export default function TicketsInbox() {
     if (cityFilter !== 'All Cities') list = list.filter(t => (t.city || '').trim() === cityFilter);
     if (statusFilter !== 'All') list = list.filter(t => t.status === statusMap[statusFilter]);
 
-    const sortFn = (arr: Ticket[]) => {
-      if (sortBy === 'oldest' || sortBy === 'longest-wait')
-        return arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      return arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    };
+    const byNewest = (a: Ticket, b: Ticket) => activityTime(b) - activityTime(a);
+    const byOldest = (a: Ticket, b: Ticket) => activityTime(a) - activityTime(b);
 
+    // "Needs reply first" = unanswered on top, each group newest-first.
     if (sortBy === 'needs-reply') {
-      const nr = list.filter(t => needsReply(t));
-      const rest = list.filter(t => !needsReply(t));
-      return [...sortFn(nr), ...sortFn(rest)];
+      const unanswered = list.filter(needsReply).sort(byNewest);
+      const answered = list.filter(t => !needsReply(t)).sort(byNewest);
+      return [...unanswered, ...answered];
     }
-    return sortFn(list);
+    return list.sort(sortBy === 'oldest' ? byOldest : byNewest);
   })();
 
   const displayedTickets = filteredTickets.slice(0, displayCount);
@@ -661,7 +663,7 @@ export default function TicketsInbox() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-popover">
-                {(['needs-reply', 'newest', 'oldest', 'longest-wait'] as SortType[]).map(s => (
+                {(['newest', 'oldest', 'needs-reply'] as SortType[]).map(s => (
                   <DropdownMenuItem key={s} onClick={() => setSortBy(s)} className="flex items-center justify-between cursor-pointer">
                     <span>{getSortLabel(s)}</span>
                     {sortBy === s && <Check className="h-4 w-4" />}
