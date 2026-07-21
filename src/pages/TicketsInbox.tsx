@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X
+  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X, Megaphone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -617,6 +617,17 @@ export default function TicketsInbox() {
             </button>
           ))}
         </nav>
+
+        {/* Broadcasts — one-to-many announcements to suppliers */}
+        <div className="px-2 pb-2 pt-1 border-t border-border">
+          <button
+            onClick={() => navigate('/broadcasts')}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+          >
+            <Megaphone className="w-4 h-4 flex-shrink-0" />
+            <span>Broadcasts</span>
+          </button>
+        </div>
 
         {/* Current user + logout */}
         <div className="p-3 border-t border-border flex-shrink-0">

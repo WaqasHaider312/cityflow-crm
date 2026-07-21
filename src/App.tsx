@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import TicketsInbox from "@/pages/TicketsInbox";
+import Broadcasts from "@/pages/Broadcasts";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           {/* Tickets — split view, detail lives inside TicketsInbox */}
           <Route element={<AppLayout />}>
             <Route path="/tickets" element={<TicketsInbox />} />
+            <Route path="/broadcasts" element={<Broadcasts />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
