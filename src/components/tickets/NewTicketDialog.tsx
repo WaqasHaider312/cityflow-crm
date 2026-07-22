@@ -76,6 +76,10 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
 
   const createTicket = async () => {
     if (!selectedSupplier || !message.trim()) return;
+    if (!selectedSupplier.supplier_uid) {
+      toast({ title: 'Supplier is missing its UID', description: 'This supplier can\'t receive tickets — the record has no supplier_uid.', variant: 'destructive' });
+      return;
+    }
     const defaultType = pickDefaultIssueType(issueTypes);
     if (!defaultType) {
       toast({ title: 'No issue types configured', description: 'Add an issue type before opening tickets.', variant: 'destructive' });
@@ -94,7 +98,10 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
       const { data: ticket, error } = await supabase
         .from('tickets')
         .insert({
-          supplier_id: selectedSupplier.id,
+          // The supplier hub matches a supplier's tickets on supplier_id == supplier_uid
+          // (the UID string), NOT the suppliers-table UUID. supplier_table_id holds the UUID.
+          supplier_id: selectedSupplier.supplier_uid,
+          supplier_table_id: selectedSupplier.id,
           supplier_name: selectedSupplier.business_name,
           supplier_phone: resolvePhone(selectedSupplier),
           city: selectedSupplier.city,
