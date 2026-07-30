@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X, Megaphone, Plus
+  Search, SlidersHorizontal, Check, Loader2, FileText, MessageSquare, LogOut, X, Megaphone, Plus, Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -630,8 +630,8 @@ export default function TicketsInbox() {
           ))}
         </nav>
 
-        {/* Broadcasts — one-to-many announcements to suppliers */}
-        <div className="px-2 pb-2 pt-1 border-t border-border">
+        {/* Broadcasts + admin — one-to-many announcements / user management */}
+        <div className="px-2 pb-2 pt-1 border-t border-border space-y-0.5">
           <button
             onClick={() => navigate('/broadcasts')}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
@@ -639,6 +639,15 @@ export default function TicketsInbox() {
             <Megaphone className="w-4 h-4 flex-shrink-0" />
             <span>Broadcasts</span>
           </button>
+          {(currentUser?.role === 'super_admin' || currentUser?.is_super_admin) && (
+            <button
+              onClick={() => navigate('/admin/users')}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+            >
+              <Shield className="w-4 h-4 flex-shrink-0" />
+              <span>User Management</span>
+            </button>
+          )}
         </div>
 
         {/* Current user + logout */}

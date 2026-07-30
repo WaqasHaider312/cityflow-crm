@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import TicketsInbox from "@/pages/TicketsInbox";
 import Broadcasts from "@/pages/Broadcasts";
+import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route element={<AppLayout />}>
             <Route path="/tickets" element={<TicketsInbox />} />
             <Route path="/broadcasts" element={<Broadcasts />} />
+            <Route path="/admin/users" element={<UserManagement />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
