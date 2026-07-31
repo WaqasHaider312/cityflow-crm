@@ -37,16 +37,25 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
   const [creating, setCreating] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  // Load suppliers once the dialog opens
+  // Debounced server-side search — scales to the whole supplier catalog
+  // (loading all rows would cap at 1000 and miss the rest). Shows the first 20
+  // by name when the box is empty, then live-searches as the agent types.
   useEffect(() => {
     if (!open) return;
-    supabase
-      .from('suppliers')
-      .select('*')
-      .eq('is_active', true)
-      .order('business_name')
-      .then(({ data }) => setSuppliers(data || []));
-  }, [open]);
+    const t = setTimeout(async () => {
+      let query = supabase
+        .from('suppliers')
+        .select('*')
+        .not('is_active', 'is', false)   // include true + null; hide only explicitly deactivated
+        .order('business_name')
+        .limit(20);
+      const q = supplierSearch.trim();
+      if (q) query = query.or(`business_name.ilike.%${q}%,supplier_uid.ilike.%${q}%,city.ilike.%${q}%`);
+      const { data } = await query;
+      setSuppliers(data || []);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [open, supplierSearch]);
 
   // Reset when closed
   useEffect(() => {
@@ -64,15 +73,7 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const filtered = suppliers.filter(s => {
-    const q = supplierSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      s.business_name?.toLowerCase().includes(q) ||
-      s.supplier_uid?.toLowerCase().includes(q) ||
-      s.city?.toLowerCase().includes(q)
-    );
-  }).slice(0, 20);
+  const filtered = suppliers;   // already searched + limited server-side
 
   const createTicket = async () => {
     if (!selectedSupplier || !message.trim()) return;
