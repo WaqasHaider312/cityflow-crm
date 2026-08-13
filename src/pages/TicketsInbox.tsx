@@ -401,7 +401,10 @@ export default function TicketsInbox() {
 
   const fetchIssueTypes = async () => {
     try {
-      const { data } = await supabase.from('issue_types').select('id, name, icon').order('name');
+      // is_active is carried so the new-ticket dialog can offer only the types
+      // suppliers can also pick. The filter dropdown still lists them all, so
+      // older tickets on retired types stay findable.
+      const { data } = await supabase.from('issue_types').select('id, name, icon, is_active').order('name');
       setIssueTypesList(data || []);
     } catch (error) {
       console.error('Error fetching issue types:', error);

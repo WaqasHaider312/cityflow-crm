@@ -6,6 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 
@@ -14,12 +17,10 @@ const resolvePhone = (s: any): string | null =>
   s?.supplier_phone || s?.phone || s?.phone_number || s?.contact_number ||
   s?.whatsapp || s?.whatsapp_number || s?.mobile || s?.contact || null;
 
-// Outbound tickets get a sensible default issue type so the intake trigger
-// (which reads issue_type_id for SLA + grouping) always has a valid value.
-const pickDefaultIssueType = (types: any[]) => {
-  if (!types?.length) return null;
-  return types.find(t => /outreach|general|other|misc/i.test(t.name || '')) || types[0];
-};
+// Only offer types a supplier could also choose, so outbound tickets group
+// alongside inbound ones. Retired types stay out of the list.
+const selectableIssueTypes = (types: any[]) =>
+  (types || []).filter(t => t?.is_active !== false);
 
 interface NewTicketDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
   const [supplierSearch, setSupplierSearch] = useState('');
   const [dropOpen, setDropOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [issueTypeId, setIssueTypeId] = useState('');
   const [message, setMessage] = useState('');
   const [creating, setCreating] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -61,6 +63,7 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
   useEffect(() => {
     if (!open) {
       setSupplierSearch(''); setSelectedSupplier(null); setMessage(''); setDropOpen(false);
+      setIssueTypeId('');
     }
   }, [open]);
 
@@ -74,16 +77,12 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
   }, []);
 
   const filtered = suppliers;   // already searched + limited server-side
+  const selectableTypes = selectableIssueTypes(issueTypes);
 
   const createTicket = async () => {
-    if (!selectedSupplier || !message.trim()) return;
+    if (!selectedSupplier || !message.trim() || !issueTypeId) return;
     if (!selectedSupplier.supplier_uid) {
       toast({ title: 'Supplier is missing its UID', description: 'This supplier can\'t receive tickets — the record has no supplier_uid.', variant: 'destructive' });
-      return;
-    }
-    const defaultType = pickDefaultIssueType(issueTypes);
-    if (!defaultType) {
-      toast({ title: 'No issue types configured', description: 'Add an issue type before opening tickets.', variant: 'destructive' });
       return;
     }
 
@@ -106,7 +105,7 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
           supplier_name: selectedSupplier.business_name,
           supplier_phone: resolvePhone(selectedSupplier),
           city: selectedSupplier.city,
-          issue_type_id: defaultType.id,
+          issue_type_id: issueTypeId,
           subject,
           description: text,
           latest_comment_preview: text.slice(0, 100),
@@ -207,6 +206,27 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
             )}
           </div>
 
+          {/* Issue type — chosen by the agent, mirroring what a supplier picks */}
+          <div>
+            <label className="text-sm font-medium text-foreground">Issue type</label>
+            <Select value={issueTypeId} onValueChange={setIssueTypeId}>
+              <SelectTrigger className="mt-1.5">
+                <SelectValue placeholder="Select an issue type…" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectableTypes.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No active issue types
+                  </div>
+                ) : selectableTypes.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.icon ? `${t.icon} ` : ''}{t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* First message */}
           <div>
             <label className="text-sm font-medium text-foreground">Message</label>
@@ -222,7 +242,7 @@ export function NewTicketDialog({ open, onOpenChange, issueTypes, onCreated }: N
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>Cancel</Button>
-          <Button onClick={createTicket} disabled={!selectedSupplier || !message.trim() || creating} className="gap-1.5">
+          <Button onClick={createTicket} disabled={!selectedSupplier || !issueTypeId || !message.trim() || creating} className="gap-1.5">
             {creating ? <Check className="h-4 w-4 animate-pulse" /> : <Send className="h-4 w-4" />}
             {creating ? 'Sending…' : 'Send & open ticket'}
           </Button>
